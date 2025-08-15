@@ -1,0 +1,24 @@
+# Expects vars:
+#   cc.* (server, username, password, verify_ssl)
+#   device_ip
+#   netclass: { name, groups: [ {address, mask}, ... ] }
+
+- name: "Create network class {{ netclass.name }} groups on {{ device_ip }}"
+  vars:
+    # index is zip with enumerate-like behavior
+    groups_with_index: "{{ netclass.groups | zip(range(netclass_index_start, netclass_index_start + (netclass.groups|length))) }}"
+  loop: "{{ groups_with_index }}"
+  loop_control:
+    loop_var: g
+    label: "{{ g.0.address }}/{{ g.0.mask }} -> index {{ g.1 }}"
+  create_network_class:
+    provider:
+      server: "{{ cc.server }}"
+      username: "{{ cc.username }}"
+      password: "{{ cc.password }}"
+      verify_ssl: "{{ cc.verify_ssl | default(false) }}"
+    device_ip: "{{ device_ip }}"
+    class_name: "{{ netclass.name }}"
+    address: "{{ g.0.address }}"
+    mask: "{{ g.0.mask }}"
+    index: "{{ g.1 }}"
