@@ -1,3 +1,4 @@
 vars/cc.yml
-vars/device_policy_map.yml
-vars/policies.yml
+inventory.ini
+ansible.cfg
+playbooks/log

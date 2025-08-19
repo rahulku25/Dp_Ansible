@@ -12,8 +12,9 @@ class Logger:
         if self.log_to_file:
             self.log_dir = "log"
             os.makedirs(self.log_dir, exist_ok=True)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            self.log_file_path = os.path.join(self.log_dir, f"log_{timestamp}.log")
+            # Use only date for log file name, so one file per run/day
+            date_str = datetime.now().strftime("%Y%m%d")
+            self.log_file_path = os.path.join(self.log_dir, f"log_{date_str}.log")
             self.log_file = open(self.log_file_path, "a", encoding="utf-8")
 
     def set_verbosity(self, level):
