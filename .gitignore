@@ -2,3 +2,4 @@ vars/cc.yml
 inventory.ini
 ansible.cfg
 playbooks/log
+tmp/
