@@ -1,0 +1,43 @@
+- name: Attach Connection Limit Attack to Profiles
+  hosts: cc
+  gather_facts: no
+  vars_files:
+    - ../vars/cc.yml
+
+  vars:
+    dp_ip:
+      - "10.105.192.32"
+      - "10.105.192.33"
+
+    cl_mappings:
+      - profile_name: "Test1"
+        attack_name: "Test_1"
+        attack_id: "450019"
+
+  tasks:
+    - block:
+        - name: Lock device(s)
+          dp_lock:
+            provider: "{{ cc }}"
+            dp_ip: "{{ item }}"
+          loop: "{{ dp_ip }}"
+
+        - name: Attach attack(s) to profile(s)
+          vars:
+            profile_matrix: "{{ dp_ip | product(cl_mappings) | list }}"
+          loop: "{{ profile_matrix }}"
+          loop_control:
+            label: "{{ item.0 }}/{{ item.1.profile_name }}/{{ item.1.attack_name }}"
+          create_cl_profile:
+            provider: "{{ cc }}"
+            dp_ip: "{{ item.0 }}"
+            profile_name: "{{ item.1.profile_name }}"
+            attack_name: "{{ item.1.attack_name }}"
+            attack_id: "{{ item.1.attack_id }}"
+
+      always:
+        - name: Unlock device(s)
+          dp_unlock:
+            provider: "{{ cc }}"
+            dp_ip: "{{ item }}"
+          loop: "{{ dp_ip }}"
