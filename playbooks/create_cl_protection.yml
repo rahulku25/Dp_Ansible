@@ -31,7 +31,7 @@
           loop: "{{ dp_ip }}"
           loop_control:
             label: "{{ item }} / Test_CL2"
-          create_cl_profile:
+          create_cl_protection:
             provider: "{{ cc }}"
             dp_ip: "{{ item }}"
             name: "Test_CL2"
