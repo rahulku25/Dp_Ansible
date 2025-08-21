@@ -28,7 +28,7 @@
           loop: "{{ dp_ip }}"
           loop_control:
             label: "{{ item }} / TEST"
-          create_syn_profile:
+          create_syn_protection:
             provider: "{{ cc }}"
             dp_ip: "{{ item }}"
             name: "TEST"
