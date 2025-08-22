@@ -5,7 +5,7 @@ from ansible.module_utils.radware_cc import RadwareCC
 
 DOCUMENTATION = r'''
 ---
-module: dp_https_profile
+module: create_https_profile
 short_description: Manage DefensePro HTTPS Flood profiles
 description:
   - Creates or updates an HTTPS Flood profile on Radware DefensePro via Radware CC API.
@@ -55,13 +55,13 @@ EXAMPLES = r'''
     dp_ip: 155.1.1.7
     name: "HTTPS_Demo1"
     params:
-      Https_Flood_Profile_Action: "1"
-      Https_Flood_Profile_RateLimit: "100"
-      Https_Flood_Profile_Selective_Challenge: "2"
-      Https_Flood_Profile_Collective_Challenge: "2"
-      Https_Flood_Profile_Challenge_Method: "2"
-      Https_Flood_Profile_RateLimit_Status: "1"
-      Https_Flood_Profile_FullSession_Decryption: "2"
+      Profile Action: "block-and-report"
+      Rate Limit: "100000"
+      Selective Challenge: "enable"
+      Collective Challenge: "enable"
+      Challenge Method: "httpRedirect"
+      Rate Limit Status: "disable"
+      Full Session Decryption: "disable"
 '''
 
 RETURN = r'''
@@ -70,16 +70,36 @@ response:
   type: dict
 '''
 
-# Mapping between friendly names (playbook) and CC API fields
+# Mapping between friendly names and CC API fields
 PARAMS_MAP = {
-    "Https_Flood_Profile_Action": "rsHttpsFloodProfileAction",
-    "Https_Flood_Profile_RateLimit": "rsHttpsFloodProfileRateLimit",
-    "Https_Flood_Profile_Selective_Challenge": "rsHttpsFloodProfileSelectiveChallenge",
-    "Https_Flood_Profile_Collective_Challenge": "rsHttpsFloodProfileCollectiveChallenge",
-    "Https_Flood_Profile_Challenge_Method": "rsHttpsFloodProfileChallengeMethod",
-    "Https_Flood_Profile_RateLimit_Status": "rsHttpsFloodProfileRateLimitStatus",
-    "Https_Flood_Profile_FullSession_Decryption": "rsHttpsFloodProfileFullSessionDecryption",
+    "Profile Action": "rsHttpsFloodProfileAction",
+    "Rate Limit": "rsHttpsFloodProfileRateLimit",
+    "Selective Challenge": "rsHttpsFloodProfileSelectiveChallenge",
+    "Collective Challenge": "rsHttpsFloodProfileCollectiveChallenge",
+    "Challenge Method": "rsHttpsFloodProfileChallengeMethod",
+    "Rate Limit Status": "rsHttpsFloodProfileRateLimitStatus",
+    "Full Session Decryption": "rsHttpsFloodProfileFullSessionDecryption",
 }
+
+# Human-readable values → integer API mapping
+NUMERIC_MAPPING = {
+    "Profile Action": {"report-only": 0, "block-and-report": 1},
+    "Selective Challenge": {"enable": 1, "disable": 2},
+    "Collective Challenge": {"enable": 1, "disable": 2},
+    "Challenge Method": {"httpRedirect": 1, "javaScript": 2},
+    "Rate Limit Status": {"enable": 1, "disable": 2},
+    "Full Session Decryption": {"enable": 1, "disable": 2},
+}
+
+def translate_params(params):
+    translated = {}
+    for k, v in params.items():
+        api_key = PARAMS_MAP.get(k, k)
+        if k in NUMERIC_MAPPING:
+            translated[api_key] = NUMERIC_MAPPING[k][str(v)]
+        else:
+            translated[api_key] = int(v) if str(v).isdigit() else v
+    return translated
 
 def run_module():
     module_args = dict(
@@ -104,11 +124,8 @@ def run_module():
                        log_level=log_level, logger=logger)
 
         if not module.check_mode:
-            # Build API body with mapped keys
             body = {"rsHttpsFloodProfileName": module.params['name']}
-            for friendly, api_field in PARAMS_MAP.items():
-                if friendly in module.params['params']:
-                    body[api_field] = module.params['params'][friendly]
+            body.update(translate_params(module.params['params']))
 
             path = f"/mgmt/device/byip/{module.params['dp_ip']}/config/rsHttpsFloodProfileTable/{module.params['name']}"
             url = f"https://{provider['server']}{path}"
