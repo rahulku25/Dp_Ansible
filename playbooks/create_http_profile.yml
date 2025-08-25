@@ -13,11 +13,11 @@
 
     # HTTPS Flood profile parameters (human-friendly names)
     https_setting:
-      Profile Action: "block-and-report"           # Profile action type
+      Profile Action: "block & report"             # report / block & report
       Rate Limit: "100000"                         # Max packets per second
       Selective Challenge: "enable"                # Enable selective challenge
       Collective Challenge: "enable"               # Enable collective challenge
-      Challenge Method: "httpRedirect"             # Challenge method type
+      Challenge Method: "httpRedirect"             # javaScript / "httpRedirect"
       Rate Limit Status: "disable"                 # Enable/disable rate limit
       Full Session Decryption: "disable"           # Enable/disable full session decryption
 
