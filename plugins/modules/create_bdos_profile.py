@@ -50,29 +50,13 @@ EXAMPLES = r'''
     dp_ip: 155.1.1.7
     name: "BDOS_Test"
     params:
-      TCP Status: "2"
-      TCP SYN Status: "2"
-      UDP Status: "1"
-      IGMP Status: "1"
-      ICMP Status: "1"
-      TCP FIN/ACK Status: "2"
-      TCP RST Status: "2"
-      TCP PSH/ACK Status: "2"
-      TCP SYN/ACK Status: "1"
-      TCP Frag Status: "1"
-      Bandwidth In: "40000"
-      Bandwidth Out: "40000"
-      Transparent Optimization: "2"
-      Action: "1"
-      Burst Enabled: "2"
-      Learning Suppression Threshold: "50"
-      Footprint Strictness: "1"
-      Rate Limit: "0"
-      Packet Report Status: "1"
-      Packet Trace Status: "2"
-      UDP Frag Status: "2"
-      UDP Frag In Quota: "25"
-      UDP Frag Out Quota: "25"
+      TCP Status: "active"
+      UDP Status: "inactive"
+      Transparent Optimization: "yes"
+      Footprint Strictness: "medium"
+      Action: "block"
+      Burst Enabled: "enable"
+      Rate Limit: "normalEdge"
 '''
 
 RETURN = r'''
@@ -81,7 +65,6 @@ response:
   type: dict
 '''
 
-# Human-readable → API keys mapping
 FIELD_MAP = {
     "TCP Status": "rsNetFloodProfileTcpStatus",
     "TCP SYN Status": "rsNetFloodProfileTcpSynStatus",
@@ -93,6 +76,7 @@ FIELD_MAP = {
     "TCP PSH/ACK Status": "rsNetFloodProfileTcpPshAckStatus",
     "TCP SYN/ACK Status": "rsNetFloodProfileTcpSynAckStatus",
     "TCP Frag Status": "rsNetFloodProfileTcpFragStatus",
+    "UDP Frag Status": "rsNetFloodProfileUdpFragStatus",
     "Bandwidth In": "rsNetFloodProfileBandwidthIn",
     "Bandwidth Out": "rsNetFloodProfileBandwidthOut",
     "Transparent Optimization": "rsNetFloodProfileTransparentOptimization",
@@ -103,14 +87,57 @@ FIELD_MAP = {
     "Rate Limit": "rsNetFloodProfileRateLimit",
     "Packet Report Status": "rsNetFloodProfilePacketReportStatus",
     "Packet Trace Status": "rsNetFloodProfilePacketTraceStatus",
-    "UDP Frag Status": "rsNetFloodProfileUdpFragStatus",
-    "UDP Frag In Quota": "rsNetFloodProfileUdpFragInQuota",
-    "UDP Frag Out Quota": "rsNetFloodProfileUdpFragOutQuota"
+    "Simulation Stop At Attack End": "rsNetFloodProfileSimulationStopAtAttackEnd",
+    "Simulation Start When Sig Change": "rsNetFloodProfileSimulationStartWhenSigChange",
+    "Joint Distribution Status": "rsNetFloodProfileJointDistributionStatus",
+    "Advanced UDP Detection": "rsNetFloodProfileAdvUdpDetection",
+    "Advanced UDP Learning Period": "rsNetFloodProfileAdvUdpLearningPeriod",
+    "Over Mitigation Status": "rsNetFloodProfileOverMitigationStatus",
+    "Level Of Regularization": "rsNetFloodProfileLevelOfReuglarzation"
+}
+
+NUMERIC_MAPPING = {
+    "TCP Status": {"active": 1, "inactive": 2},
+    "TCP SYN Status": {"active": 1, "inactive": 2},
+    "UDP Status": {"active": 1, "inactive": 2},
+    "IGMP Status": {"active": 1, "inactive": 2},
+    "ICMP Status": {"active": 1, "inactive": 2},
+    "TCP FIN/ACK Status": {"active": 1, "inactive": 2},
+    "TCP RST Status": {"active": 1, "inactive": 2},
+    "TCP PSH/ACK Status": {"active": 1, "inactive": 2},
+    "TCP SYN/ACK Status": {"active": 1, "inactive": 2},
+    "TCP Frag Status": {"active": 1, "inactive": 2},
+    "UDP Frag Status": {"active": 1, "inactive": 2},
+    "Transparent Optimization": {"yes": 1, "no": 2},
+    "Footprint Strictness": {"low": 0, "medium": 1, "high": 2},
+    "Packet Report Status": {"enable": 1, "disable": 2},
+    "Packet Trace Status": {"enable": 1, "disable": 2},
+    "Action": {"report": 0, "block & report": 1},
+    "Burst Enabled": {"enable": 1, "disable": 2},
+    "Rate Limit": {"disable": 0, "normalEdge": 1, "suspectEdge": 2, "userDefined": 3},
+    "Simulation Stop At Attack End": {"false": 0, "true": 1},
+    "Simulation Start When Sig Change": {"false": 0, "true": 1},
+    "Joint Distribution Status": {"enable": 1, "disable": 2},
+    "Advanced UDP Detection": {"enable": 1, "disable": 2},
+    "Advanced UDP Learning Period": {"sixHours": 1, "oneDay": 2, "threeDays": 3},
+    "Over Mitigation Status": {"enable": 1, "disable": 2},
+    "Level Of Regularization": {"notApplied": 1, "weak": 2, "middle": 3, "strong": 4},
 }
 
 def translate_params(params):
-    """Convert human-readable keys to API keys"""
-    return {FIELD_MAP.get(k, k): v for k, v in params.items()}
+    """Translate human-readable values to API numeric values using NUMERIC_MAPPING"""
+    translated = {}
+    for k, v in params.items():
+        api_key = FIELD_MAP.get(k, k)
+        mapping = NUMERIC_MAPPING.get(k)
+        if mapping:
+            try:
+                translated[api_key] = mapping[v.lower()] if isinstance(v, str) else mapping[v]
+            except KeyError:
+                raise ValueError(f"Invalid value '{v}' for parameter '{k}'. Allowed: {list(mapping.keys())}")
+        else:
+            translated[api_key] = v
+    return translated
 
 def run_module():
     module_args = dict(
