@@ -10,18 +10,19 @@
       - "10.105.192.32"
       - "10.105.192.33"
 
-    # DNS Protection profile parameters (human-friendly names)
+    # DNS Protection profile parameters (human-friendly)
     dns_setting:
       DNS Expected Qps: "4000"
-      DNS Action: "1"
+      DNS Action: "block"                 # ✅ block & report / report
       DNS Max Allow Qps: "4500"
-      DNS Manual Trigger Status: "2"
-      DNS Footprint Strictness: "1"
-      DNS Packet Report Status: "1"
+      DNS Manual Trigger Status: "disable" # ✅ enable / disable
+      DNS Footprint Strictness: "medium"  # ✅ low / medium / high
+      DNS Packet Report Status: "enable"  # ✅ enable / disable
       DNS Learning Suppression Threshold: "50"
 
     dns_profiles:
       - name: "DNS_Demo2"
+      - name: "DNS_Demo3"
 
   tasks:
     - block:
@@ -37,7 +38,7 @@
           loop: "{{ profile_matrix }}"
           loop_control:
             label: "{{ item.0 }}/{{ item.1.name }}"
-          create_dns_profile:     # ✅ matches your module file plugins/modules/create_dns_profile.py
+          create_dns_profile:
             provider: "{{ cc }}"
             dp_ip: "{{ item.0 }}"
             name: "{{ item.1.name }}"
