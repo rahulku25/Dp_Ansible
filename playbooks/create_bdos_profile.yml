@@ -12,29 +12,28 @@
 
     # BDOS Flood profile parameters (human-friendly names)
     bdos_profile_params:
-      TCP Status: "2"
-      TCP SYN Status: "2"
-      UDP Status: "1"
-      IGMP Status: "1"
-      ICMP Status: "1"
-      TCP FIN/ACK Status: "2"
-      TCP RST Status: "2"
-      TCP PSH/ACK Status: "2"
-      TCP SYN/ACK Status: "1"
-      TCP Frag Status: "1"
-      Bandwidth In: "40000"
-      Bandwidth Out: "40000"
-      Transparent Optimization: "2"
-      Action: "1"
-      Burst Enabled: "2"
-      Learning Suppression Threshold: "50"
-      Footprint Strictness: "1"
-      Rate Limit: "0"
-      Packet Report Status: "1"
-      Packet Trace Status: "2"
-      UDP Frag Status: "2"
-      UDP Frag In Quota: "25"
-      UDP Frag Out Quota: "25"
+      TCP Status: "inactive"                  # Protocol TCP: active/inactive
+      TCP SYN Status: "inactive"              # Protocol TCP SYN: active/inactive
+      UDP Status: "active"                    # Protocol UDP: active/inactive
+      IGMP Status: "active"                   # Protocol IGMP: active/inactive
+      ICMP Status: "active"                   # Protocol ICMP: active/inactive
+      TCP FIN/ACK Status: "inactive"          # Protocol TCP FIN/ACK: active/inactive
+      TCP RST Status: "inactive"              # Protocol TCP RST: active/inactive
+      TCP PSH/ACK Status: "inactive"          # Protocol TCP PSH/ACK: active/inactive
+      TCP SYN/ACK Status: "active"            # Protocol TCP SYN/ACK: active/inactive
+      TCP Frag Status: "active"               # TCP Fragment: active/inactive
+      Bandwidth In: "40000"                   # Max incoming bandwidth (Mbps)
+      Bandwidth Out: "40000"                  # Max outgoing bandwidth (Mbps)
+      Transparent Optimization: "yes"         # Transparent optimization: yes/no
+      Action: "block"                         # Action: report/block & report
+      Burst Enabled: "enable"                 # Burst mode: enable/disable
+      Learning Suppression Threshold: "50"    # Learning suppression threshold (percentage)
+      Footprint Strictness: "medium"          # Footprint strictness: low/medium/high
+      Rate Limit: "disable"                   # Rate limit: disable/normalEdge/suspectEdge/userDefined
+      Packet Report Status: "enable"          # Packet reporting: enable/disable
+      Packet Trace Status: "enable"           # Packet tracing: enable/disable
+      UDP Frag Status: "inactive"             # UDP Fragment detection: active/inactive
+      # Removed UDP Frag In Quota and UDP Frag Out Quota to avoid 500 error
 
     bdos_profiles:
       - name: "BDOS_Test"
