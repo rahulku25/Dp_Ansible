@@ -1,39 +1,33 @@
-# plugins/modules/dp_connection_limit_profile.py
+# plugins/modules/create_cl_protection.py
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.radware_cc import RadwareCC
 
 DOCUMENTATION = r'''
 ---
-module: dp_connection_limit_profile
-short_description: Create or manage DefensePro IDS Connection Limit profiles
+module: create_cl_protection
+short_description: Create or manage DefensePro IDS Connection Limit attacks
 description:
-  - Creates an IDS Connection Limit profile on Radware DefensePro via Radware CC API.
+  - Creates a Connection Limit attack on Radware DefensePro via Radware CC API.
+  - Supports human-readable keys/values mapped to numeric API codes.
 options:
   provider:
-    description:
-      - Dictionary with connection parameters.
+    description: Radware CC connection details
     type: dict
     required: true
     suboptions:
-      server:
-        description: CC IP address
-        type: str
-        required: true
-      username:
-        type: str
-        required: true
-      password:
-        type: str
-        required: true
+      server: str
+      username: str
+      password: str
   dp_ip:
+    description: DefensePro device IP
     type: str
     required: true
   name:
+    description: Name of the attack
     type: str
     required: true
   params:
-    description:
-      - Dictionary of IDS Connection Limit profile attributes (user-friendly names allowed).
+    description: Dictionary of attack parameters (human-readable keys)
     type: dict
     required: true
 author:
@@ -41,59 +35,68 @@ author:
 '''
 
 EXAMPLES = r'''
-- name: Create IDS Connection Limit profile
-  dp_connection_limit_profile:
+- name: Create Connection Limit attack
+  create_cl_protection:
     provider:
       server: 155.1.1.6
       username: radware
       password: mypass
     dp_ip: 155.1.1.7
-    name: "Test_CL2"
+    name: "Test_Prot"
     params:
-      Connection Limit Attack Protocol: "3"
-      Connection Limit Attack Threshold: "50"
-      Connection Limit Attack Tracking Type: "2"
-      Connection Limit Attack ReportMode: "10"
-      Connection Limit Attack PacketReport: "2"
-      Connection Limit Attack Risk: "3"
-      Connection Limit Attack Type: "1"
+      protocol: tcp
+      report_mode: drop
+      threshold: 50
+      tracking: ncps
+      attack_type: concurrentconnection
+      packet_report: disable
+      risk: medium
+      suspend_action: none
 '''
 
 RETURN = r'''
 response:
-  description: API response from Radware CC
+  description: API response
   type: dict
 '''
 
-# Mapping for user-friendly → Radware API keys
 FIELD_MAP = {
-    "Connection Limit Attack Protocol": "rsIDSConnectionLimitAttackProtocol",
-    "Connection Limit Attack Threshold": "rsIDSConnectionLimitAttackThreshold",
-    "Connection Limit Attack Tracking Type": "rsIDSConnectionLimitAttackTrackingType",
-    "Connection Limit Attack ReportMode": "rsIDSConnectionLimitAttackReportMode",
-    "Connection Limit Attack PacketReport": "rsIDSConnectionLimitAttackPacketReport",
-    "Connection Limit Attack Risk": "rsIDSConnectionLimitAttackRisk",
-    "Connection Limit Attack Type": "rsIDSConnectionLimitAttackType",
+    "protocol": "rsIDSConnectionLimitAttackProtocol",
+    "report_mode": "rsIDSConnectionLimitAttackReportMode",
+    "threshold": "rsIDSConnectionLimitAttackThreshold",
+    "tracking": "rsIDSConnectionLimitAttackTrackingType",
+    "attack_type": "rsIDSConnectionLimitAttackType",
+    "packet_report": "rsIDSConnectionLimitAttackPacketReport",
+    "risk": "rsIDSConnectionLimitAttackRisk",
+    "suspend_action": "rsIDSConnectionLimitAttackSuspendAction",
 }
 
+VALUE_MAP = {
+    "protocol": {"tcp": 2, "udp": 3},
+    "report_mode": {"report-only": 0, "drop": 10},
+    "tracking": {"ncps": 2, "ncpd": 3, "ncpsd": 4, "ncpdanddstport": 5},
+    "attack_type": {"cps": 1, "concurrentconnection": 2},
+    "packet_report": {"enable": 1, "disable": 2},
+    "risk": {"info": 1, "low": 2, "medium": 3, "high": 4},
+    "suspend_action": {"none": 0, "sip": 1, "sipdip": 2, "sipdipdprt": 3, "sipdprt": 4},
+}
 
 def translate_params(params):
-    """Convert user-friendly keys to Radware API keys."""
     translated = {}
     for k, v in params.items():
-        if k in FIELD_MAP:
-            translated[FIELD_MAP[k]] = v
+        api_key = FIELD_MAP.get(k, k)
+        if k in VALUE_MAP and isinstance(v, str):
+            translated[api_key] = VALUE_MAP[k].get(v.lower(), v)
         else:
-            translated[k] = v  # passthrough for already API-ready keys
+            translated[api_key] = v
     return translated
-
 
 def run_module():
     module_args = dict(
         provider=dict(type='dict', required=True),
         dp_ip=dict(type='str', required=True),
         name=dict(type='str', required=True),
-        params=dict(type='dict', required=True)
+        params=dict(type='dict', required=True),
     )
 
     result = dict(changed=False, response={})
@@ -110,29 +113,20 @@ def run_module():
                        log_level=log_level, logger=logger)
 
         if not module.check_mode:
-            # Always use numeric ID in the path (0)
             path = f"/mgmt/device/byip/{module.params['dp_ip']}/config/rsIDSConnectionLimitAttackTable/0/"
             body = {"rsIDSConnectionLimitAttackName": module.params['name']}
-            # Translate user-friendly params → API params
             body.update(translate_params(module.params['params']))
 
             url = f"https://{provider['server']}{path}"
-            debug_info = {
-                'method': 'POST',
-                'url': url,
-                'body': body
-            }
-            logger.info(f"Creating IDS Connection Limit profile {module.params['name']} on device {module.params['dp_ip']}")
+            debug_info = {'method': 'POST', 'url': url, 'body': body}
+
+            logger.info(f"Creating attack '{module.params['name']}' on {module.params['dp_ip']}")
             logger.debug(f"Request: {debug_info}")
 
             resp = cc._post(url, json=body)
-            logger.debug(f"Response status: {resp.status_code}")
-
             try:
                 data = resp.json()
-                logger.debug(f"Response JSON: {data}")
             except ValueError:
-                logger.error(f"Invalid JSON response: {resp.text}")
                 raise Exception(f"Invalid JSON response: {resp.text}")
 
             result['response'] = data
@@ -141,16 +135,13 @@ def run_module():
             debug_info['response_json'] = data
 
     except Exception as e:
-        logger.error(f"Exception: {str(e)}")
         module.fail_json(msg=str(e), debug_info=debug_info, **result)
 
     result['debug_info'] = debug_info
     module.exit_json(**result)
 
-
 def main():
     run_module()
-
 
 if __name__ == '__main__':
     main()
