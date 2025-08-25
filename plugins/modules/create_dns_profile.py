@@ -51,11 +51,11 @@ EXAMPLES = r'''
     name: "DNS_Demo2"
     params:
       DNS Expected Qps: "4000"
-      DNS Action: "1"
+      DNS Action: "block"
       DNS Max Allow Qps: "4500"
-      DNS Manual Trigger Status: "2"
-      DNS Footprint Strictness: "1"
-      DNS Packet Report Status: "1"
+      DNS Manual Trigger Status: "disable"
+      DNS Footprint Strictness: "medium"
+      DNS Packet Report Status: "enable"
       DNS Learning Suppression Threshold: "50"
 '''
 
@@ -76,15 +76,26 @@ FIELD_MAP = {
     "DNS Learning Suppression Threshold": "rsDnsProtProfileLearningSuppressionThreshold",
 }
 
+# Numeric mapping for user-friendly values
+NUMERIC_MAPPING = {
+    "DNS Action": {"report": 0, "block & report": 1},
+    "DNS Manual Trigger Status": {"enable": 1, "disable": 2},
+    "DNS Footprint Strictness": {"low": 0, "medium": 1, "high": 2},
+    "DNS Packet Report Status": {"enable": 1, "disable": 2},
+}
+
 
 def translate_params(params):
-    """Convert user-friendly keys to Radware API keys."""
+    """Convert user-friendly keys and values to Radware API format."""
     translated = {}
     for k, v in params.items():
-        if k in FIELD_MAP:
-            translated[FIELD_MAP[k]] = v
+        api_key = FIELD_MAP.get(k, k)
+        if k in NUMERIC_MAPPING:
+            # Convert friendly value to integer
+            translated[api_key] = NUMERIC_MAPPING[k][str(v).lower()]
         else:
-            translated[k] = v  # passthrough for already API-ready keys
+            # Use integer if numeric, else keep as-is
+            translated[api_key] = int(v) if str(v).isdigit() else v
     return translated
 
 
@@ -113,7 +124,6 @@ def run_module():
             # Path for DNS profiles
             path = f"/mgmt/device/byip/{module.params['dp_ip']}/config/rsDnsProtProfileTable/{module.params['name']}"
             body = {"rsDnsProtProfileName": module.params['name']}
-            # Translate user-friendly params → API params
             body.update(translate_params(module.params['params']))
 
             url = f"https://{provider['server']}{path}"
