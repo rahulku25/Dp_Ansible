@@ -2,9 +2,6 @@
 """
 Unified Ansible module to create Protected SSL Objects on DefensePro via Radware CyberController API.
 
-- Supports multiple SSL objects
-- Converts enable/disable to API values (1/2)
-- Returns all user-friendly parameters for display
 """
 
 from ansible.module_utils.basic import AnsibleModule
@@ -13,6 +10,7 @@ ENABLE_MAP = {
     "enable": "1",
     "disable": "2"
 }
+
 
 def run_module():
     module_args = dict(
@@ -54,12 +52,11 @@ def run_module():
                 port = ssl.get('Port', 443)
 
                 if not name or not ip:
-                    error_msg = f"SSL object missing required 'ssl_object_name' or 'IP_Address'"
+                    error_msg = f"SSL object missing required 'ssl_object_name' or 'ip_address'"
                     errors.append(error_msg)
                     logger.error(error_msg)
                     continue
 
-                # Map enable/disable values
                 body = {
                     "rsProtectedObjName": name,
                     "rsProtectedObjEnable": ENABLE_MAP.get(ssl.get('ssl_object_status', 'enable'), '1'),
@@ -92,7 +89,6 @@ def run_module():
                     resp = cc._post(url, json=body)
                     data = resp.json()
 
-                    # Return all user-friendly parameters
                     created_objects.append({
                         'ssl_object_name': name,
                         'parameters': ssl,
@@ -120,12 +116,13 @@ def run_module():
                 'summary': {
                     'total_objects_attempted': len(created_objects),
                     'successful_objects': len([o for o in created_objects if o['status'] == 'success']),
-                    'failed_objects': len([o for o in created_objects if o['status'] == 'failed'])
+                    'failed_objects': len([o for o in created_objects if o['status'] == 'failed']),
+                    'successful_names': [o['ssl_object_name'] for o in created_objects if o['status'] == 'success'],
+                    'failed_names': [o['ssl_object_name'] for o in created_objects if o['status'] == 'failed']
                 }
             }
 
         else:
-            # Check mode
             planned_operations = []
             for ssl in ssl_objects:
                 name = ssl.get('ssl_object_name', '')
@@ -148,11 +145,12 @@ def run_module():
                 'total_operations': len(planned_operations)
             }
 
-        if errors:
-            if not result.get('changed', False):
-                module.fail_json(msg=f"All operations failed. Errors: {'; '.join(errors)}", debug_info=debug_info, **result)
-            else:
-                result['warnings'] = errors
+        # Fail module if *all* objects failed
+        if errors and not result.get('changed', False):
+            module.fail_json(msg=f"All operations failed. Errors: {'; '.join(errors)}",
+                             debug_info=debug_info, **result)
+        elif errors:
+            result['warnings'] = errors
 
     except Exception as e:
         logger.error(f"Exception: {str(e)}")

@@ -7,7 +7,7 @@
     - ../vars/create_vars.yml
 
   tasks:
-    - name: Create and configure SSL objects block
+    - name: Create SSL objects block
       block:
         - name: Lock device(s)
           dp_lock:
@@ -26,23 +26,36 @@
             label: "Device: {{ item }}"
           register: create_results
 
-        - name: Display SSL creation results (formatted)
+        - name: Display SSL creation results
           vars:
             formatted_output: |
               Device: {{ item.item }}
               EXECUTION RESULTS:
+
               {% set created_objects = item.response.created_objects | default([]) %}
               {% if created_objects %}
-              SSL Objects created successfully:
-              {% for obj in created_objects %}
+              {% for obj in created_objects if obj.status == 'success' %}
+              SSL Object created successfully:
                 - {{ obj.ssl_object_name }}
                   Parameters:
                   {% for key, value in obj.parameters.items() %}
                     - {{ key }}: {{ value }}
                   {% endfor %}
               {% endfor %}
-              {% else %}
-              No SSL objects configured for creation.
+
+              {% for obj in created_objects if obj.status == 'failed' %}
+              SSL Object creation failed:
+                - {{ obj.ssl_object_name }}
+                  Error: {{ obj.error | default('Unknown error') }}
+              {% endfor %}
+              {% endif %}
+
+              {% set summary = item.response.summary | default({}) %}
+              {% if summary %}
+              SSL Object Summary:
+                - Total attempted: {{ summary.total_objects_attempted | default(0) }}
+                - Successful: {{ summary.successful_objects | default(0) }}
+                - Failed: {{ summary.failed_objects | default(0) }}
               {% endif %}
           ansible.builtin.debug:
             msg: "{{ formatted_output.split('\n') }}"
