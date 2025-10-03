@@ -18,7 +18,7 @@ def format_ssl_object_for_display(raw_obj):
     Convert raw SSL object API data to user-friendly format.
     """
     formatted = {
-        "ssl_object_profile": ENABLE_DISABLE_MAP.get(raw_obj.get("rsProtectedObjEnable"), raw_obj.get("rsProtectedObjEnable")),
+        "ssl_object_status": ENABLE_DISABLE_MAP.get(raw_obj.get("rsProtectedObjEnable"), raw_obj.get("rsProtectedObjEnable")),
         "ip_address": raw_obj.get("rsProtectedObjIpAddr"),
         "Port": raw_obj.get("rsProtectedObjApplPort"),
         "front_sslv3": ENABLE_DISABLE_MAP.get(raw_obj.get("rsProtectedObjSSLV3Enable")),

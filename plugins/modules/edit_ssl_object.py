@@ -61,7 +61,7 @@ def run_module():
 
                 # Prepare body for API
                 body = {
-                    "rsProtectedObjEnable": ENABLE_MAP.get(ssl.get('ssl_object_profile', 'enable'), '1'),
+                    "rsProtectedObjEnable": ENABLE_MAP.get(ssl.get('ssl_object_status', 'enable'), '1'),
                     "rsProtectedObjIpAddr": ip,
                     "rsProtectedObjApplPort": port,
                     "rsProtectedObjDefaultSNICertificate": ssl.get('sni_certificate', ''),

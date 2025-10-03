@@ -4,7 +4,7 @@
   gather_facts: false
   vars_files:
     - ../vars/cc.yml
-    - ../vars/get_vars.yml   # contains dp_ip (list of device IPs) and filter_ssl_object_names
+    - ../vars/get_vars.yml   
 
   tasks:
 

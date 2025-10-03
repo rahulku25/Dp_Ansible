@@ -1026,7 +1026,7 @@ oos_profiles:
 ```yml
 create_ssl_objects:
   - ssl_object_name: "server1"         # MANDATORY: SSL object name
-    ssl_object_profile: "enable"       # OPTIONAL: enable, disable (default: enable)
+    ssl_object_status: "enable"       # OPTIONAL: enable, disable (default: enable)
     ip_address: "155.1.102.7"          # MANDATORY: Device IP
     Port: 443                           # OPTIONAL: Port (default: 443)
     add_certificate: "radware"         # OPTIONAL: Certificate to add
@@ -1053,7 +1053,7 @@ create_ssl_objects:
 ```yml
 edit_ssl_objects:
   - ssl_object_name: "server1"         # MANDATORY: SSL object name
-    ssl_object_profile: "enable"       # OPTIONAL: enable, disable (default: enable)
+    ssl_object_status: "enable"       # OPTIONAL: enable, disable (default: enable)
     ip_address: "155.1.102.7"          # MANDATORY: Device IP
     Port: 443                           # OPTIONAL: Port (default: 443)
     add_certificate: "radware"         # OPTIONAL: Certificate to add

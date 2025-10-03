@@ -260,7 +260,7 @@ create_dns_profiles:
 # Define SSL objects to edit
 create_ssl_objects:
   - ssl_object_name: "server1"                   # Mandatory: exact SSL object name
-    ssl_object_profile: "enable"                 # Options: enable, disable
+    ssl_object_status: "enable"                 # Options: enable, disable
     ip_address: "155.1.102.9"                    # Mandatory
     Port: 443                                    # Optional – default: 443
     add_certificate: ""                          # Optional – certificate name to add 
@@ -280,7 +280,7 @@ create_ssl_objects:
 ### Notes for SSL Objects:
 # *** ssl_object_name ***: Mandatory –  SSL object name to add 
 # Supported SSL Object Parameters:
-# ssl_object_profile: enable / disable
+# ssl_object_status: enable / disable
 # IP_Address: IP of the server
 # Port: TCP port (default: 443)
 # add_certificate / remove_certificate: certificate management

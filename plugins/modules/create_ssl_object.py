@@ -62,7 +62,7 @@ def run_module():
                 # Map enable/disable values
                 body = {
                     "rsProtectedObjName": name,
-                    "rsProtectedObjEnable": ENABLE_MAP.get(ssl.get('ssl_object_profile', 'enable'), '1'),
+                    "rsProtectedObjEnable": ENABLE_MAP.get(ssl.get('ssl_object_status', 'enable'), '1'),
                     "rsProtectedObjIpAddr": ip,
                     "rsProtectedObjApplPort": port,
                     "rsProtectedObjAddCertificate": ssl.get('add_certificate', ''),

@@ -4,7 +4,7 @@
   gather_facts: false
   vars_files:
     - ../vars/cc.yml
-    - ../vars/delete_vars.yml  # contains ssl_objects list
+    - ../vars/delete_vars.yml 
 
   tasks:
     - name: Delete SSL objects block

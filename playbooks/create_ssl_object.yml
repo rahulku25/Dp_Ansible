@@ -1,5 +1,5 @@
 ---
-- name: Create Protected SSL Objects (Unified)
+- name: Create Protected SSL Objects
   hosts: cc
   gather_facts: false
   vars_files:
