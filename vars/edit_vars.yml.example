@@ -263,7 +263,7 @@ oos_profiles:
 # Only specify parameters you want to change – unspecified parameters remain unchanged
 edit_ssl_objects:
   - ssl_object_name: "server1"                   # Mandatory: exact SSL object name
-    ssl_object_profile: "enable"                 # Options: enable, disable
+    ssl_object_status: "enable"                 # Options: enable, disable
     ip_address: "155.1.102.9"                    # Mandatory if changing IP
     Port: 443                                    # Optional – default: 443
     add_certificate: ""                          #  Optional – certificate name to add, you can either add_certificate or remove_certificate in a single call but not both)
@@ -286,7 +286,7 @@ edit_ssl_objects:
 # *** ssl_object_name ***: Mandatory – exact SSL object name to edit (use get_ssl_object to verify)
 # Only specify parameters you want to change – unspecified parameters remain unchanged
 # Supported SSL Object Parameters:
-# ssl_object_profile: enable / disable
+# ssl_object_status: enable / disable
 # IP_Address: IP of the server
 # Port: TCP port (default: 443)
 # add_certificate / remove_certificate: certificate management
