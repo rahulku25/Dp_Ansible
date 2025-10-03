@@ -266,8 +266,8 @@ edit_ssl_objects:
     ssl_object_profile: "enable"                 # Options: enable, disable
     ip_address: "155.1.102.9"                    # Mandatory if changing IP
     Port: 443                                    # Optional – default: 443
-    add_certificate: ""                          # Optional – certificate name to add 
-    remove_certificate: ""                       # Optional – certificate name to remove
+    add_certificate: ""                          #  Optional – certificate name to add, you can either add_certificate or remove_certificate in a single call but not both)
+    remove_certificate: ""                       # # Optional – certificate name to add, you can either add_certificate or remove_certificate in a single call but not both
     front_sslv3: "disable"                       # Options: enable, disable
     front_tls1.0: "disable"                      # Options: enable, disable
     front_tls1.1: "disable"                      # Options: enable, disable

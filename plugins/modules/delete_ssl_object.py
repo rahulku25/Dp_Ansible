@@ -13,7 +13,6 @@ Supports:
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.radware_cc import RadwareCC
 from ansible.module_utils.logger import Logger
-import traceback
 
 DOCUMENTATION = r'''
 ---
@@ -92,11 +91,9 @@ debug_info:
 # Helpers
 # -------------------------------
 def build_api_path(dp_ip, ssl_object):
-    """Construct API endpoint path for SSL object deletion."""
     return f"/mgmt/device/byip/{dp_ip}/config/rsProtectedSslObjTable/{ssl_object}/"
 
 def verify_ssl_absence(cc, provider_ip, dp_ip, ssl_object):
-    """Verify that an SSL object no longer exists in the table."""
     path = f"/mgmt/device/byip/{dp_ip}/config/rsProtectedSslObjTable"
     url = f"https://{provider_ip}{path}"
     resp = cc._get(url)
@@ -131,14 +128,18 @@ def run_module():
     # Validate provider fields
     for key in ('cc_ip', 'username', 'password'):
         if key not in provider or not provider[key]:
-            module.fail_json(msg=f"Missing required provider field: {key}", **result)
+            result['response'].append({
+                "ssl_object": "module-validation",
+                "failed": True,
+                "response": {"message": f"Missing required provider field: {key}"}
+            })
+            module.exit_json(**result)
 
     try:
         cc = RadwareCC(provider['cc_ip'], provider['username'], provider['password'],
                        log_level=log_level, logger=logger)
 
         for obj in ssl_objects:
-            # Ensure obj is string
             if isinstance(obj, dict):
                 obj = obj.get('name')
 
@@ -159,7 +160,7 @@ def run_module():
                 data = resp.json() if resp.content else {"status": "deleted"}
 
                 if status_code not in (200, 204):
-                    data.setdefault('error', f"HTTP {status_code}")
+                    data.setdefault('message', f"HTTP {status_code}")
                     result['response'].append({"ssl_object": obj, "response": data, "failed": True})
                     logger.warning(f"SSL object '{obj}' may not exist or deletion failed: {data}")
                     continue
@@ -170,9 +171,8 @@ def run_module():
                     if not verified:
                         result['response'].append({
                             "ssl_object": obj,
-                            "response": data,
-                            "failed": True,
-                            "msg": "SSL object still exists after deletion"
+                            "response": {"message": "SSL object still exists after deletion"},
+                            "failed": True
                         })
                         logger.error(f"SSL object '{obj}' still exists after deletion")
                         continue
@@ -183,15 +183,22 @@ def run_module():
             except Exception as ex:
                 result['response'].append({
                     "ssl_object": obj,
-                    "response": {"error": str(ex), "traceback": traceback.format_exc()},
+                    "response": {"message": str(ex)},
                     "failed": True
                 })
                 logger.error(f"Exception deleting SSL object '{obj}': {ex}")
 
+        # Exit cleanly with all responses; never fail the playbook
         module.exit_json(**result)
 
     except Exception as e:
-        module.fail_json(msg=str(e), **result)
+        # Catch any module-level errors and return as a response
+        result['response'].append({
+            "ssl_object": "module-level-error",
+            "response": {"message": str(e)},
+            "failed": True
+        })
+        module.exit_json(**result)
 
 def main():
     run_module()
