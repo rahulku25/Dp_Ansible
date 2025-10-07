@@ -4,6 +4,7 @@ Unified Ansible module to edit DefensePro SYN protections and attach protections
 
 Features:
 - Edits existing SYN protections (partial updates supported).
+- Edits SYN profile parameters (new feature added).
 - Attaches protections to SYN profiles (multi-attach supported).
 - Provides clean, structured debug info including METHOD, URI, Response Code, and response data.
 - Removed packet_report support as requested.
@@ -39,6 +40,19 @@ def run_module():
         log_level=log_level,
         logger=logger,
     )
+
+    # Profile parameter reverse mapping for display
+    value_map = {
+        "activation_mode": {1: "continuous", 2: "threshold_based"},
+        "tcp_reset_status": {1: "enable", 2: "disable"},
+        "ssl_mitigation_status": {1: "enable", 2: "disable"},
+        "action": {0: "report_only", 1: "block_and_report"},
+        "tracking_mode": {1: "per_destination", 2: "per_policy"},
+        "destination_ports": {1: "syn_profile", 2: "all"},
+        "auth_type": {1: "safe_reset", 2: "transparent_proxy"},
+        "web_enable": {1: "enable", 2: "disable"},
+        "web_method": {1: "redirect", 2: "javascript"},
+    }
 
     any_changed = False
     debug_info = {"device": dp_ip, "protections": [], "profiles": []}
@@ -97,22 +111,55 @@ def run_module():
             debug_info["protections"].append(prot_result["debug_info"])
 
         # ----------------------------------------
-        # Step 2: Attach protections to SYN profiles
+        # Step 2: Edit profile parameters + attach protections
         # ----------------------------------------
         for profile in edit_syn_profiles:
             profile_name = profile.get("name")
             protections = profile.get("protections", [])
+            params = profile.get("params", {})
 
             if not profile_name:
                 result["results"].append({"debug_info": {"error": "Profile name is missing"}})
                 continue
 
-            if not protections:
-                result["results"].append(
-                    {"debug_info": {"warning": f"No protections defined for profile {profile_name}"}}
-                )
-                continue
+            # ---- Edit profile parameters ----
+            if params:
+                param_result = dict(changed=False, response={}, debug_info={}, parameters={})
+                body = {}
+                for k, v in params.items():
+                    if v is not None:
+                        body[k] = v
+                        # Convert numeric value to human-readable for debug
+                        if k in value_map:
+                            param_result["parameters"][k] = value_map[k].get(v, v)
+                        else:
+                            param_result["parameters"][k] = v
 
+                if body:
+                    path = f"/mgmt/device/byip/{dp_ip}/config/rsIDSSynProfilesParamsTable/{profile_name}"
+                    url = f"https://{provider['cc_ip']}{path}"
+                    param_result["debug_info"].update({"method": "PUT", "uri": url, "body": body})
+
+                    logger.info(f"Editing SYN profile parameters for {profile_name} on device {dp_ip}")
+                    logger.debug(f"PUT URL: {url}, body: {body}")
+
+                    try:
+                        if not module.check_mode:
+                            resp = cc._put(url, json=body)
+                            param_result["response"] = resp.json()
+                            param_result["debug_info"]["status_code"] = resp.status_code
+                            param_result["changed"] = True
+                            any_changed = True
+                            logger.info(f"Edited profile parameters for {profile_name}")
+                            logger.debug(f"Response: {param_result['response']}")
+                    except Exception as e:
+                        param_result["debug_info"]["error"] = str(e)
+                        logger.error(f"Failed to edit profile parameters {profile_name}: {str(e)}")
+
+                    result["results"].append(param_result)
+                    debug_info["profiles"].append(param_result["debug_info"])
+
+            # ---- Attach protections to profile ----
             for protection_name in protections:
                 prof_result = dict(changed=False, response={}, debug_info={}, parameters={})
                 body = {

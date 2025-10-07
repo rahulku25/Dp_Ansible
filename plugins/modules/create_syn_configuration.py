@@ -1,13 +1,9 @@
-# plugins/modules/manage_syn_configuration.py
 """
 Unified Ansible module to manage DefensePro SYN protections and profiles.
 
-- Handles both SYN protection creation and SYN profile creation.
-- Provides structured results, summary, and full debug details.
 """
 
 from ansible.module_utils.basic import AnsibleModule
-
 
 def run_module():
     module_args = dict(
@@ -30,14 +26,8 @@ def run_module():
     from ansible.module_utils.logger import Logger
     logger = Logger(verbosity=log_level)
 
-    # Log input parameters
     logger.debug(f"Module input: dp_ip={dp_ip}, protections_count={len(syn_protections)}, profiles_count={len(syn_profiles)}")
-
-    debug_info['input'] = {
-        'dp_ip': dp_ip,
-        'protections_count': len(syn_protections),
-        'profiles_count': len(syn_profiles)
-    }
+    debug_info['input'] = {'dp_ip': dp_ip, 'protections_count': len(syn_protections), 'profiles_count': len(syn_profiles)}
 
     try:
         from ansible.module_utils.radware_cc import RadwareCC
@@ -48,149 +38,193 @@ def run_module():
         created_protections = []
         created_profiles = []
 
-        if not module.check_mode:
+        check_mode = module.check_mode
 
-            # Create SYN protections
-            for protection in syn_protections:
-                protection_name = protection['name']
-                body = {
-                    "rsIDSSYNAttackName": protection_name,
-                    "rsIDSSYNAttackActivationThreshold": protection.get("activation_threshold", 1000),
-                    "rsIDSSYNAttackTerminationThreshold": protection.get("termination_threshold", 500),
-                    "rsIDSSYNDestinationAppPortGroup": protection.get("app_port_group", "")
-                }
+        for protection in syn_protections:
+            protection_name = protection.get('name', 'unnamed_protection')
+            body = {
+                "rsIDSSYNAttackName": protection_name,
+                "rsIDSSYNAttackActivationThreshold": protection.get("activation_threshold", 1000),
+                "rsIDSSYNAttackTerminationThreshold": protection.get("termination_threshold", 500),
+                "rsIDSSYNDestinationAppPortGroup": protection.get("app_port_group", "")
+            }
 
-                path = f"/mgmt/device/byip/{dp_ip}/config/rsIDSSYNAttackTable/0"
-                url = f"https://{provider['cc_ip']}{path}"
+            url = f"https://{provider['cc_ip']}/mgmt/device/byip/{dp_ip}/config/rsIDSSYNAttackTable/0"
 
-                logger.info(f"Creating SYN protection '{protection_name}'")
-                logger.debug(f"SYN protection POST URL: {url}, Body: {body}")
+            if not check_mode:
+                logger.info(f"Creating SYN protection '{protection_name}' at URL: {url}")
                 resp = cc._post(url, json=body)
-
                 try:
                     data = resp.json()
                 except Exception:
                     data = {"raw_text": resp.text}
+                refresh_device_state(cc, dp_ip, provider, logger)
+            else:
+                data = {"status": "check_mode_skipped"}
 
-                # Log response
-                logger.debug(f"SYN protection '{protection_name}' response: {data}")
+            created_protections.append({
+                'name': protection_name,
+                'parameters': {
+                    "activation_threshold": body["rsIDSSYNAttackActivationThreshold"],
+                    "termination_threshold": body["rsIDSSYNAttackTerminationThreshold"],
+                    "app_port_group": body["rsIDSSYNDestinationAppPortGroup"]
+                },
+                'request': {"method": "POST", "uri": url, "body": body},
+                'response': data
+            })
 
-                # Append protection without 'index' in response
-                created_protections.append({
-                    'name': protection_name,
-                    'parameters': {
-                        "activation_threshold": body["rsIDSSYNAttackActivationThreshold"],
-                        "termination_threshold": body["rsIDSSYNAttackTerminationThreshold"],
-                        "app_port_group": body["rsIDSSYNDestinationAppPortGroup"],
-                    },
-                    'request': {"method": "POST", "uri": url, "body": body},
-                    'response_code': resp.status_code,
-                    'raw_response': data
+            debug_info['operations'].append({
+                "type": "protection_create",
+                "name": protection_name,
+                "method": "POST",
+                "uri": url,
+                "request_body": body,
+                "response": data
+            })
+
+            changes_made = True
+
+        FIELD_MAP = {
+            "profile_type": "rsIDSSynProfileType",
+            "auth_type": "rsIDSSynProfilesParamsAuthType",
+            "web_enable": "rsIDSSynProfilesParamsWebEnable",
+            "web_method": "rsIDSSynProfilesParamsWebMethod",
+            "tcp_reset_status": "rsIDSSynProfileTCPResetStatus",
+            "ssl_mitigation_status": "rsIDSSynProfilesSSLMitigationStatus",
+            "action": "rsIDSSynProfilesAction",
+            "tracking_mode": "rsIDSSynProfileTrackingMode",
+            "destination_ports": "rsIDSSynProfileDestinationPorts",
+            "activation_mode": "rsIDSSynProfileActivationMode",
+            "activation_threshold": "rsIDSSynProfilesActivationThreshold"
+        }
+
+        VALUE_MAP = {
+            "profile_type": {"syn_protection": 4},
+            "auth_type": {"safe_reset": 1, "transparent_proxy": 2},
+            "web_enable": {"enable": 1, "disable": 2},
+            "web_method": {"redirect": 1, "javascript": 2},
+            "tcp_reset_status": {"enable": 1, "disable": 2},
+            "ssl_mitigation_status": {"enable": 1, "disable": 2},
+            "action": {"report_only": 0, "block_and_report": 1},
+            "tracking_mode": {"per_destination": 1, "per_policy": 2},
+            "destination_ports": {"syn_profile": 1, "all": 2},
+            "activation_mode": {"continuous": 1, "threshold_based": 2}
+        }
+
+        for profile in syn_profiles:
+            profile_name = profile.get('name', 'unnamed_profile')
+            protections = profile.get('protections', [])
+            params = profile.get('params', {})
+
+            for protection_name in protections:
+                # Create profile entry
+                body_profile = {
+                    "rsIDSSynProfilesName": profile_name,
+                    "rsIDSSynProfileServiceName": protection_name
+                }
+                url_profile = f"https://{provider['cc_ip']}/mgmt/device/byip/{dp_ip}/config/rsIDSSynProfilesTable/{profile_name}/{protection_name}"
+
+                if not check_mode:
+                    logger.info(f"Creating SYN profile '{profile_name}' for protection '{protection_name}' at URL: {url_profile}")
+                    resp_profile = cc._post(url_profile, json=body_profile)
+                    try:
+                        data_profile = resp_profile.json()
+                    except Exception:
+                        data_profile = {"raw_text": resp_profile.text}
+                    refresh_device_state(cc, dp_ip, provider, logger)
+                else:
+                    data_profile = {"status": "check_mode_skipped"}
+
+                debug_info['operations'].append({
+                    "type": "profile_create",
+                    "profile": profile_name,
+                    "protection": protection_name,
+                    "method": "POST",
+                    "uri": url_profile,
+                    "request_body": body_profile,
+                    "response": data_profile
+                })
+
+                body_params = {"rsIDSSynProfilesName": profile_name}
+                profile_output_params = {}
+
+                for key, val in params.items():
+                    if key == "web_method" and str(params.get("web_enable")).lower() != "enable":
+                        logger.debug(f"Skipping web_method for profile '{profile_name}' because web_enable is not enabled")
+                        continue
+
+                    # Activation threshold only for threshold_based mode
+                    if key == "activation_threshold":
+                        if str(params.get("activation_mode")).lower() == "threshold_based":
+                            body_params[FIELD_MAP[key]] = val
+                            profile_output_params[key] = val
+                            logger.info(f"Profile '{profile_name}': Using activation_threshold={val} (threshold_based mode)")
+                        else:
+                            profile_output_params[key] = "skipped (continuous mode)"
+                            logger.debug(f"Skipping activation_threshold for profile '{profile_name}' (continuous mode)")
+                        continue
+
+                    field_name = FIELD_MAP.get(key, key)
+                    mapped_val = VALUE_MAP.get(key, {}).get(str(val).lower(), val)
+                    body_params[field_name] = mapped_val
+                    profile_output_params[key] = val
+                    logger.info(f"Profile '{profile_name}' param '{key}': API field='{field_name}', value='{mapped_val}'")
+
+                url_params = f"https://{provider['cc_ip']}/mgmt/device/byip/{dp_ip}/config/rsIDSSynProfilesParamsTable/{profile_name}"
+
+                if not check_mode:
+                    resp_params = cc._put(url_params, json=body_params)
+                    try:
+                        data_params = resp_params.json()
+                    except Exception:
+                        data_params = {"raw_text": resp_params.text}
+                    refresh_device_state(cc, dp_ip, provider, logger)
+                else:
+                    data_params = {"status": "check_mode_skipped"}
+
+                created_profiles.append({
+                    'profile_name': profile_name,
+                    'protection_name': protection_name,
+                    'parameters': profile_output_params,
+                    'request': {"method": "PUT", "uri": url_params, "body": body_params},
+                    'response': data_params
                 })
 
                 debug_info['operations'].append({
-                    "type": "protection_create",
-                    "name": protection_name,
-                    "method": "POST",
-                    "uri": url,
-                    "request_body": body,
-                    "status_code": resp.status_code,
-                    "response": data
+                    "type": "profile_update",
+                    "profile": profile_name,
+                    "protection": protection_name,
+                    "method": "PUT",
+                    "uri": url_params,
+                    "request_body": body_params,
+                    "response": data_params
                 })
 
                 changes_made = True
-                refresh_device_state(cc, dp_ip, provider, logger)
-
-            # Create SYN profiles
-            FIELD_MAP = {"profile_type": "rsIDSSynProfileType"}
-            VALUE_MAP = {"profile_type": {"syn_protection": 4}}
-
-            for profile in syn_profiles:
-                profile_name = profile['name']
-                protections = profile.get('protections', [])
-
-                for protection_name in protections:
-                    body = {
-                        "rsIDSSynProfilesName": profile_name,
-                        "rsIDSSynProfileServiceName": protection_name
-                    }
-
-                    if "params" in profile:
-                        for k, v in profile["params"].items():
-                            api_key = FIELD_MAP.get(k, k)
-                            api_value = VALUE_MAP.get(k, {}).get(v.lower(), v) if isinstance(v, str) else v
-                            body[api_key] = api_value
-
-                    path = f"/mgmt/device/byip/{dp_ip}/config/rsIDSSynProfilesTable/{profile_name}/{protection_name}"
-                    url = f"https://{provider['cc_ip']}{path}"
-
-                    logger.info(f"Creating SYN profile '{profile_name}' with protection '{protection_name}'")
-                    logger.debug(f"SYN profile POST URL: {url}, Body: {body}")
-                    resp = cc._post(url, json=body)
-
-                    try:
-                        data = resp.json()
-                    except Exception:
-                        data = {"raw_text": resp.text}
-
-                    logger.debug(f"SYN profile '{profile_name}' response: {data}")
-
-                    created_profiles.append({
-                        'profile_name': profile_name,
-                        'protection_name': protection_name,
-                        'parameters': profile.get("params", {}),
-                        'request': {"method": "POST", "uri": url, "body": body},
-                        'response_code': resp.status_code,
-                        'raw_response': data
-                    })
-
-                    debug_info['operations'].append({
-                        "type": "profile_create",
-                        "profile": profile_name,
-                        "protection": protection_name,
-                        "method": "POST",
-                        "uri": url,
-                        "request_body": body,
-                        "status_code": resp.status_code,
-                        "response": data
-                    })
-
-                    changes_made = True
-                    refresh_device_state(cc, dp_ip, provider, logger)
-
-        protections_created_count = len(created_protections)
-        profiles_created_count = len(created_profiles)
 
         result['changed'] = changes_made
         result['response'] = {
             'protections': created_protections,
             'profiles': created_profiles,
             'summary': {
-                'total_protections_attempted': protections_created_count,
-                'total_profiles_attempted': profiles_created_count,
-                'protections_created': protections_created_count,
-                'profiles_created': profiles_created_count,
+                'total_protections_attempted': len(created_protections),
+                'total_profiles_attempted': len(created_profiles),
+                'protections_created': len(created_protections),
+                'profiles_created': len(created_profiles),
                 'operations_completed': changes_made
             }
         }
-
-        # Log final summary
-        logger.debug(f"Module execution summary: {result['response']['summary']}")
-        debug_info['summary'] = result['response']['summary']
+        result['debug_info'] = debug_info
+        module.exit_json(**result)
 
     except Exception as e:
-        logger.error(f"Exception: {str(e)}")
         module.fail_json(msg=str(e), debug_info=debug_info, **result)
-
-    result['debug_info'] = debug_info
-    module.exit_json(**result)
 
 
 def refresh_device_state(cc, dp_ip, provider, logger):
     """Refresh device state to avoid API caching issues."""
     try:
-        path = f"/mgmt/device/byip/{dp_ip}/config/rsIDSSYNAttackTable"
-        url = f"https://{provider['cc_ip']}{path}"
+        url = f"https://{provider['cc_ip']}/mgmt/device/byip/{dp_ip}/config/rsIDSSYNAttackTable"
         resp = cc._get(url)
         logger.debug(f"Refreshed device state for {dp_ip} (status {resp.status_code})")
     except Exception as e:

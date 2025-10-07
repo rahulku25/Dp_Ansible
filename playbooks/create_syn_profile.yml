@@ -34,32 +34,37 @@
               {% if item.failed | default(false) %}
               Error occurred during SYN creation:
                 - {{ item.msg | default('Unknown error') }}
-              {% elif item.response.protections | length > 0 or item.response.profiles | length > 0 %}
-              SYN Configurations created successfully:
-              {% if item.response.protections | length > 0 %}
+              {% else %}
+                {% if item.response.protections | length > 0 %}
               Protections ({{ item.response.protections | length }}):
-              {% for prot in item.response.protections %}
+                  {% for prot in item.response.protections %}
                 - Name: {{ prot.name }}
                   Parameters:
-                    Activation Threshold: {{ prot.parameters.activation_threshold }}
-                    Termination Threshold: {{ prot.parameters.termination_threshold }}
-                    App Port Group: {{ prot.parameters.app_port_group }}
-              {% endfor %}
-              {% endif %}
-              {% if item.response.profiles | length > 0 %}
+                    Activation Threshold: {{ prot.parameters.activation_threshold | default('N/A') }}
+                    Termination Threshold: {{ prot.parameters.termination_threshold | default('N/A') }}
+                    App Port Group: {{ prot.parameters.app_port_group | default('N/A') }}
+                  {% endfor %}
+                {% endif %}
+                {% if item.response.profiles | length > 0 %}
               Profiles ({{ item.response.profiles | length }}):
-              {% for prof in item.response.profiles %}
+                  {% for prof in item.response.profiles %}
                 - Profile Name: {{ prof.profile_name }}
-                  Attached Protection: {{ prof.protection_name }}
-              {% endfor %}
-              {% endif %}
+                  Attached Protection: {{ prof.protection_name | default('N/A') }}
+                  Parameters:
+                    {% for key, val in prof.parameters.items() %}
+                    {% if val is string and 'skipped' in val %}
+                    {{ key | replace('_', ' ') | title }}: {{ val }}  # Skipped due to configuration
+                    {% else %}
+                    {{ key | replace('_', ' ') | title }}: {{ val | default('N/A') }}
+                    {% endif %}
+                    {% endfor %}
+                  {% endfor %}
+                {% endif %}
               SYN Summary:
                 - Total protections attempted: {{ item.response.summary.total_protections_attempted | default(0) }}
                 - Protections created: {{ item.response.summary.protections_created | default(0) }}
                 - Total profiles attempted: {{ item.response.summary.total_profiles_attempted | default(0) }}
                 - Profiles created: {{ item.response.summary.profiles_created | default(0) }}
-              {% else %}
-              No SYN protections/profiles were created.
               {% endif %}
           ansible.builtin.debug:
             msg: "{{ syn_output.split('\n') }}"

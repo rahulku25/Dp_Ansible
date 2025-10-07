@@ -9,6 +9,7 @@
   tasks:
     - name: Edit SYN protections block
       block:
+
         - name: Lock device(s)
           dp_lock:
             provider: "{{ cc }}"
@@ -33,9 +34,18 @@
               rsIDSSYNAttackActivationThreshold: "activation_threshold"
               rsIDSSYNAttackTerminationThreshold: "termination_threshold"
               rsIDSSYNDestinationAppPortGroup: "app_port_group"
-              rsIDSSYNAttackPacketReport: "packet_report"
               rsIDSSynProfilesName: "profile_name"
               rsIDSSynProfileServiceName: "protection_name"
+              rsIDSSynProfilesParamsAuthType: "auth_type"
+              rsIDSSynProfilesParamsWebEnable: "web_enable"
+              rsIDSSynProfilesParamsWebMethod: "web_method"
+              rsIDSSynProfileTCPResetStatus: "tcp_reset_status"
+              rsIDSSynProfilesSSLMitigationStatus: "ssl_mitigation_status"
+              rsIDSSynProfilesAction: "action"
+              rsIDSSynProfileTrackingMode: "tracking_mode"
+              rsIDSSynProfileDestinationPorts: "destination_ports"
+              rsIDSSynProfileActivationMode: "activation_mode"
+              rsIDSSynProfilesActivationThreshold: "profile_activation_threshold"
 
             formatted_output: |
               Device: {{ item.item }}
