@@ -322,9 +322,9 @@ ORCHESTRATION LAYER
      - Check mode with preview functionality showing exact operations
      - Formatted output with success/failure indicators
      - List-based filtering support for get operations
-   - **Modules**: `create_ssl_profile.py`, `edit_ssl_profile.py`, `delete_ssl_profile.py`, `get_ssl_profile.py`
+   - **Modules**: `create_ssl_object.py`, `edit_ssl_object.py`, `delete_ssl_object.py`, `get_ssl_object.py`
 
-8. **HTTPS Modules** (`plugins/modules/`)
+9. **HTTPS Modules** (`plugins/modules/`)
    - **Enhancement**: All modules follow consistent unified pattern
    - **Key Features**:
      - Single device call with batch processing (moved from YAML loops to Python)
@@ -333,7 +333,6 @@ ORCHESTRATION LAYER
      - Check mode with preview functionality showing exact operations
      - Formatted output with success/failure indicators
      - List-based filtering support for get operations
-   - **Modules**: `create_ssl_object.py`, `edit_ssl_object.py`, `delete_ssl_object.py`, `get_ssl_object.py`
    - **Modules**: `create_https_profile.py`, `edit_https_profile.py`, `delete_https_profile.py`, `get_https_profile.py`
 
 9. **SYN Profile Modules** (`plugins/modules/`)
@@ -347,6 +346,7 @@ ORCHESTRATION LAYER
      - List-based filtering support for get operations
    - **Modules**: `create_syn_configuration.py`, `edit_syn_configuration.py`, `delete_syn_configuration.py`, `get_syn_configuration.py`
 
+10. **Traffic Filter Modules** (`plugins/modules/`)
 10. **Traffic Filter Modules** (`plugins/modules/`)
    - **Enhancement**: All modules follow consistent unified pattern
    - **Key Features**:
@@ -1135,8 +1135,8 @@ PUT /mgmt/device/byip/10.105.192.32/config/rsProtectedSslObjTable/{ssl_object_na
         }
 ```
 Usage:
-Call edit_ssl_object once per device, passing list of profiles to edit.
-Each ssl object dict must include ssl_object_name (mandatory) and any parameters to change
+Call edit_ssl_object once per device, passing list of SSL objects to edit.
+Each SSL object dict must include ssl_object_name (mandatory) and any parameters to change
 
 #### Get SSL Object 
 ```json
@@ -1309,7 +1309,10 @@ syn_protection_deletions:
 
 
 
-###  Create HTTPS Profile 
+
+#### Get SSL Object 
+```json
+GET /mgmt/device/byip/10.105.192.32/config/rsProtectedSslObjTable/{ssl_object_name} 
 ```json
 POST /mgmt/device/byip/10.105.192.32/config/rsIDSNewHTTPSFloodProfileTable/{profile_name}
         {
@@ -1373,7 +1376,52 @@ delete_https_profiles:
   - name: "http_profile_2"
 ```
 
-###  Create TF Profile 
+#### Get SSL Object 
+```json
+GET /mgmt/device/byip/10.105.192.32/config/rsProtectedSslObjTable/{ssl_object_name}
+
+Response:
+{
+    "rsProtectedSslObjTable": [
+        {
+            "rsProtectedObjName": "server1",
+            "rsProtectedObjEnable": "1",
+            "rsProtectedObjIpAddr": "155.1.102.7",
+            "rsProtectedObjApplPort": "443",
+            "rsProtectedObjAddCertificate": "",
+            "rsProtectedObjRemoveCertificate": "",
+            "rsProtectedObjSSLV3Enable": "2",
+            "rsProtectedObjTLS10Enable": "2",
+            "rsProtectedObjTLS11Enable": "1",
+            "rsProtectedObjTLS12Enable": "1",
+            "rsProtectedObjTLS13Enable": "1",
+            "rsBEDecryptionEnable": "1",
+            "rsBEProtectedObjSSLV3Enable": "2",
+            "rsBEProtectedObjTLS10Enable": "2",
+            "rsBEProtectedObjTLS11Enable": "1",
+            "rsBEProtectedObjTLS12Enable": "1",
+            "rsBEProtectedObjTLS13Enable": "1",
+            "rsBEL4PortNumber": "80"
+        }
+    ]
+}
+```
+#Usage:-
+#Call get_ssl_object once per device
+#Optional filtering: filter_ssl_object_names: ["server1", "server2"]
+#Returns nested structure: profiles -> settings
+#API mappings handled internally
+
+### Delete SSL Object
+```yml
+DELETE /mgmt/device/byip/{dp_ip}/config/rsProtectedSslObjTable/{ssl_object_name}
+
+delete_ssl_objects:
+  - name: server1
+  - name: server2
+```
+
+### Create HTTPS Profile 
 ```json
 POST /mgmt/device/byip/10.105.192.32/config/rsNewTrafficProfileTable/{profile_name}
         {

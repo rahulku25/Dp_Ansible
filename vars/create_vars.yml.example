@@ -367,51 +367,37 @@ create_https_profiles:
   # Note - SSL Decryption and Encryption should be enabled on the DP for challenge method to work
 
 ########################## Traffic Filter Profiles and Protections ##########################
-# Define Traffic Filter profiles to create per device
-# All parameters use user-friendly values that are automatically mapped to API values
-# You can skip creating some profiles/protections by leaving the list empty
-
-# Traffic Filter profiles to create
-create_tf_profiles:
-  - name: "TF_PROFILE_1"
-    params:
-      action: "report_only"          # Options: report_only, block_and_report
-
-  - name: "TF_PROFILE_2"
-    params:
-      action: "block_and_report"     # Options: report_only, block_and_report
-
-########################## Traffic Filter Profiles and Protections ##########################
 # List of Traffic Filter profiles and protections to create per device
 # Each item contains create_tf_profiles and create_tf_protections lists
 # create_tf_profiles: list of profiles to create
 # create_tf_protections: list of protections under the profiles
 
-# Create Traffic Filter Profiles
 
 create_tf_profiles:
   - profile_name: "TF_PROFILE_1"
     action: "report_only"           # report_only, block_and_report (Default: repot_only)
   - profile_name: "TF_PROFILE_2"
     action: "block_and_report"      # report_only, block_and_report
+  - profile_name: "TF_PROFILE_3"
+    action: "block_and_report"      # report_only, block_and_report  
 
 create_tf_protections:
   - profile_name: "TF_PROFILE_1"
     protection_name: "TF_PROT_1"
-    status: "enable"                # enable, disable (Default: enable)
-    match_criteria: "match"         # match, not-match (Default:match)
-    protocol: "tcp"                 # any, tcp, udp, icmp, etc. (Default:any)
-    tcp_syn: "enable"               # TCP SYN flag handling (Default:enable)
-    tcp_ack: "enable"               # TCP ACK flag handling (Default:enable)
-    tcp_rst: "enable"               # TCP RST flag handling (Default:enable)
-    tcp_synack: "enable"            # TCP SYN-ACK flag handling (Default:enable)
-    tcp_finack: "enable"            # TCP FIN-ACK flag handling (Default:enable)
-    tcp_pshack: "enable"            # TCP PSH-ACK flag handling (Default:enable)
+    status: "enable"                # Optional: enable, disable (Default: enable)
+    match_criteria: "match"         # Optional: match, not-match (Default:match)
+    protocol: "tcp"                 # Ottional: any, tcp, udp, icmp, etc. (Default:any)
     threshold_pps: "5000"           # Optional: rate limit in packets per second (deafult :10000)
-    threshold_kbps: "0"              # Optional: rate limit in kilo bits per second
-    packet_report: "enable"         # enable, disable (Default:enable)
-    threshold_unit: "pps"           # kbps, pps (Default:pps)
-    attack_tracking_type: "per_destination"    # all, per-source, per-destination, per_source_and_destination, track_returning_traffic (Default:all)
+    threshold_kbps: "0"             # Optional: rate limit in kilo bits per second
+    threshold_unit: "pps"           # optional: kbps, pps (Default:pps)
+    tcp_syn: "enable"               # Optional: TCP SYN flag handling (Default:enable)
+    tcp_ack: "enable"               # Optional: TCP ACK flag handling (Default:enable)
+    tcp_rst: "enable"               # Optional: TCP RST flag handling (Default:enable)
+    tcp_synack: "enable"            # Optional: TCP SYN-ACK flag handling (Default:enable)
+    tcp_finack: "enable"            # Optional: TCP FIN-ACK flag handling (Default:enable)
+    tcp_pshack: "enable"            # optional: TCP PSH-ACK flag handling (Default:enable)
+    packet_report: "enable"         # Optional: enable, disable (Default:enable)
+    attack_tracking_type: "per_destination"    # Optional: all, per-source, per-destination, per_source_and_destination, track_returning_traffic (Default:all)
 
 
   - profile_name: "TF_PROFILE_2"
@@ -419,16 +405,18 @@ create_tf_protections:
     status: "enable"             
     match_criteria: "match"         # match, not-match
     protocol: "tcp"                 # any, tcp, udp, icmp, etc.
+    threshold_pps: "5000"
+    threshold_kbps: "0"
+    threshold_unit: "pps"           # kbps, pps
     tcp_syn: "enable"
     tcp_ack: "enable"
     tcp_rst: "enable"
     tcp_synack: "enable"
     tcp_finack: "enable"
     tcp_pshack: "enable"
-    threshold_pps: "5000"
-    threshold_kbps: "0"
+
     packet_report: "enable"         # enable, disable
-    threshold_unit: "pps"           # kbps, pps
+
     attack_tracking_type: "all"    # all, per-source, per-destination, per_source_and_destination, track_returning_traffic
 
 ## Minimal configuration to create protection
@@ -450,6 +438,8 @@ security_policy_config:
   create_bdos_profiles: true       # Set false if BDoS profiles already exist
   create_dns_profiles: true        # Set false if DNS profiles already exist
   create_https_profiles: true      # Set false if HTTPS profiles already exist
+  create_traffic_filter_profiles: true # Set false if Traffic Filter profiles already exist
+  create_ssl_objects: true         # Set false if SSL objects already exist
 
   create_security_policies: true   # Set false to skip policy creation
   apply_policies_after_creation: true  # Set false to skip automatic policy updates
@@ -471,7 +461,7 @@ create_security_policies:
     # syn_protection_profile: ""                         # SYN profile (if available) 
     dns_flood_profile: "dns_profile_10"                 # DNS profile (created above or existing)
     https_flood_profile: "https_profile_1"              # HTTPS profile (created above or existing)
-    # traffic_filters_profile: ""                        # Traffic filter profile (if available)
+    traffic_filters_profile: "TF_PROFILE_1"             # Traffic filter profile (created above or existing)
     signature_protection_profile: "All-DoS-Shield"      # AppSec profile (if available)
     # ert_attackers_feed_profile: ""                     # ERT profile (if available)
     # geo_feed_profile: ""                               # Geo feed profile (if available)
@@ -500,6 +490,7 @@ create_security_policies:
 #   * bdos_profile: Behavioral DoS flood protection profile  
 #   * dns_flood_profile: DNS flood protection profile
 #   * https_flood_profile: HTTPS flood protection profile
+#   * traffic_filters_profile: Traffic filter protection profile
 #   * signature_protection_profile: Application security signatures
 #   * out_of_state_profile: Out-of-state connection handling
 #   * Other profile types available as needed
