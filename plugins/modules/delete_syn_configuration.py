@@ -1,13 +1,11 @@
 """
 Ansible module to delete DefensePro SYN profiles and protections.
-
-Features:
-- Remove protections from profiles
-- Delete protections entirely
-- Provides structured debug info including METHOD, URI, and response status
-- Compatible with check mode for dry-run
-- Returns summary of total attempted, deleted, and failed
+Supports:
+- Proper red/green reporting based on deletion results
+- Dry-run (check mode)
+- Structured debug info and summary
 """
+
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.logger import Logger
 from ansible.module_utils.radware_cc import RadwareCC
@@ -64,6 +62,7 @@ def run_module():
 
         operations = []
 
+        # Build remove_from_profile operations
         for profile in syn_profile_deletions:
             profile_name = profile.get('profile_name')
             protections = profile.get('protections', [])
@@ -80,6 +79,7 @@ def run_module():
                     'exists': prot_id is not None
                 })
 
+        # Build delete_protection operations
         for prot_del in syn_protection_deletions:
             for prot_name in prot_del.get('protections_to_delete', []):
                 prot_id = protection_name_to_id.get(prot_name)
@@ -138,7 +138,7 @@ def run_module():
                 })
                 logger.error(f"Failed: {op['description']}")
 
-        # Prepare final result including summary
+        # Summary
         total_attempted = len(operations)
         total_deleted = len(deleted_from_profiles) + len(deleted_protections)
         total_failed = len(failed_operations)
@@ -158,10 +158,17 @@ def run_module():
             'debug_info': debug_info
         }
 
+        # Fail if all failed, warn if partial failure
+        if total_failed > 0:
+            if total_deleted == 0:
+                module.fail_json(msg=f"All SYN deletions failed. Errors: {[f['error'] for f in failed_operations]}", debug_info=debug_info, **result)
+            else:
+                result['warnings'] = [f['error'] for f in failed_operations]
+
         module.exit_json(**result)
 
     except Exception as e:
-        module.fail_json(msg=str(e), debug_info=debug_info)
+        module.fail_json(msg=f"SYN deletion module failed: {str(e)}", debug_info=debug_info)
 
 
 def main():

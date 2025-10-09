@@ -1,6 +1,5 @@
 """
 Unified Ansible module to manage DefensePro SYN protections and profiles.
-
 """
 
 from ansible.module_utils.basic import AnsibleModule
@@ -40,6 +39,7 @@ def run_module():
 
         check_mode = module.check_mode
 
+        # Create protections first
         for protection in syn_protections:
             protection_name = protection.get('name', 'unnamed_protection')
             body = {
@@ -84,6 +84,7 @@ def run_module():
 
             changes_made = True
 
+        # Profile FIELD & VALUE mapping
         FIELD_MAP = {
             "profile_type": "rsIDSSynProfileType",
             "auth_type": "rsIDSSynProfilesParamsAuthType",
@@ -95,7 +96,7 @@ def run_module():
             "tracking_mode": "rsIDSSynProfileTrackingMode",
             "destination_ports": "rsIDSSynProfileDestinationPorts",
             "activation_mode": "rsIDSSynProfileActivationMode",
-            "activation_threshold": "rsIDSSynProfilesActivationThreshold"
+            "activation_threshold": "rsIDSSynProfileActivationThreshold"  # profile threshold
         }
 
         VALUE_MAP = {
@@ -111,6 +112,7 @@ def run_module():
             "activation_mode": {"continuous": 1, "threshold_based": 2}
         }
 
+        # Create profiles
         for profile in syn_profiles:
             profile_name = profile.get('name', 'unnamed_profile')
             protections = profile.get('protections', [])
@@ -145,27 +147,38 @@ def run_module():
                     "response": data_profile
                 })
 
-                body_params = {"rsIDSSynProfilesName": profile_name}
+                # Build profile parameters
+                body_params = {"rsIDSSynProfilesParamsName": profile_name}
                 profile_output_params = {}
 
+                tracking_mode_val = str(params.get("tracking_mode", "per_policy")).lower()
+                activation_mode_val = str(params.get("activation_mode", "continuous")).lower()
+
                 for key, val in params.items():
+                    # Web method only if web_enable is "enable"
                     if key == "web_method" and str(params.get("web_enable")).lower() != "enable":
                         logger.debug(f"Skipping web_method for profile '{profile_name}' because web_enable is not enabled")
                         continue
 
-                    # Activation threshold only for threshold_based mode
+                    # Profile activation threshold: only if threshold_based
                     if key == "activation_threshold":
-                        if str(params.get("activation_mode")).lower() == "threshold_based":
-                            body_params[FIELD_MAP[key]] = val
+                        if activation_mode_val == "threshold_based":
+                            body_params[FIELD_MAP[key]] = str(val)
                             profile_output_params[key] = val
-                            logger.info(f"Profile '{profile_name}': Using activation_threshold={val} (threshold_based mode)")
+                            logger.info(f"Profile '{profile_name}': Using profile_activation_threshold={val} (threshold_based mode)")
                         else:
                             profile_output_params[key] = "skipped (continuous mode)"
-                            logger.debug(f"Skipping activation_threshold for profile '{profile_name}' (continuous mode)")
+                            logger.debug(f"Skipping profile_activation_threshold for profile '{profile_name}' (continuous mode)")
+                        continue
+
+                    # Auth fields only if tracking_mode is per_destination
+                    if key in ["auth_type", "web_enable", "web_method"] and tracking_mode_val != "per_destination":
+                        profile_output_params[key] = f"skipped (tracking_mode={tracking_mode_val})"
+                        logger.debug(f"Skipping auth field '{key}' for profile '{profile_name}' (tracking_mode={tracking_mode_val})")
                         continue
 
                     field_name = FIELD_MAP.get(key, key)
-                    mapped_val = VALUE_MAP.get(key, {}).get(str(val).lower(), val)
+                    mapped_val = VALUE_MAP.get(key, {}).get(str(val).lower(), str(val))
                     body_params[field_name] = mapped_val
                     profile_output_params[key] = val
                     logger.info(f"Profile '{profile_name}' param '{key}': API field='{field_name}', value='{mapped_val}'")

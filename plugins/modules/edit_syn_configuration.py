@@ -4,16 +4,15 @@ Unified Ansible module to edit DefensePro SYN protections and attach protections
 
 Features:
 - Edits existing SYN protections (partial updates supported).
-- Edits SYN profile parameters (new feature added).
-- Attaches protections to SYN profiles (multi-attach supported).
-- Provides clean, structured debug info including METHOD, URI, Response Code, and response data.
-- Removed packet_report support as requested.
+- Edits SYN profile parameters.
+- Attaches protections to SYN profiles.
+- Outputs human-readable profile parameters (no numeric codes).
+- Provides structured debug info including METHOD, URI, Response Code, and response data.
 """
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.radware_cc import RadwareCC
 from ansible.module_utils.logger import Logger
-
 
 def run_module():
     module_args = dict(
@@ -41,17 +40,17 @@ def run_module():
         logger=logger,
     )
 
-    # Profile parameter reverse mapping for display
-    value_map = {
-        "activation_mode": {1: "continuous", 2: "threshold_based"},
+    # Mapping for human-readable output
+    REVERSE_VALUE_MAP = {
+        "auth_type": {1: "safe_reset", 2: "transparent_proxy"},
+        "web_enable": {1: "enable", 2: "disable"},
+        "web_method": {1: "redirect", 2: "javascript"},
         "tcp_reset_status": {1: "enable", 2: "disable"},
         "ssl_mitigation_status": {1: "enable", 2: "disable"},
         "action": {0: "report_only", 1: "block_and_report"},
         "tracking_mode": {1: "per_destination", 2: "per_policy"},
         "destination_ports": {1: "syn_profile", 2: "all"},
-        "auth_type": {1: "safe_reset", 2: "transparent_proxy"},
-        "web_enable": {1: "enable", 2: "disable"},
-        "web_method": {1: "redirect", 2: "javascript"},
+        "activation_mode": {1: "continuous", 2: "threshold_based"},
     }
 
     any_changed = False
@@ -71,7 +70,6 @@ def run_module():
                 result["results"].append(prot_result)
                 continue
 
-            # Only include provided parameters
             if "activation_threshold" in prot:
                 body["rsIDSSYNAttackActivationThreshold"] = prot["activation_threshold"]
                 prot_result["parameters"]["activation_threshold"] = prot["activation_threshold"]
@@ -101,7 +99,7 @@ def run_module():
                     prot_result["debug_info"]["status_code"] = resp.status_code
                     prot_result["changed"] = True
                     any_changed = True
-                    logger.info(f"Edited SYN protection {prot_index} successfully")
+                    logger.info(f"Edited SYN protection {prot_index}")
                     logger.debug(f"Response: {prot_result['response']}")
             except Exception as e:
                 prot_result["debug_info"]["error"] = str(e)
@@ -122,58 +120,56 @@ def run_module():
                 result["results"].append({"debug_info": {"error": "Profile name is missing"}})
                 continue
 
-            # ---- Edit profile parameters ----
+            # Edit profile parameters
             if params:
                 param_result = dict(changed=False, response={}, debug_info={}, parameters={})
                 body = {}
                 for k, v in params.items():
                     if v is not None:
                         body[k] = v
-                        # Convert numeric value to human-readable for debug
-                        if k in value_map:
-                            param_result["parameters"][k] = value_map[k].get(v, v)
+                        # Map to human-readable for debug output
+                        if k in REVERSE_VALUE_MAP:
+                            param_result["parameters"][k] = str(v)  # temporarily numeric; will map after response
                         else:
                             param_result["parameters"][k] = v
 
-                if body:
-                    path = f"/mgmt/device/byip/{dp_ip}/config/rsIDSSynProfilesParamsTable/{profile_name}"
-                    url = f"https://{provider['cc_ip']}{path}"
-                    param_result["debug_info"].update({"method": "PUT", "uri": url, "body": body})
+                path = f"/mgmt/device/byip/{dp_ip}/config/rsIDSSynProfilesParamsTable/{profile_name}"
+                url = f"https://{provider['cc_ip']}{path}"
+                param_result["debug_info"].update({"method": "PUT", "uri": url, "body": body})
 
-                    logger.info(f"Editing SYN profile parameters for {profile_name} on device {dp_ip}")
-                    logger.debug(f"PUT URL: {url}, body: {body}")
+                logger.info(f"Editing SYN profile {profile_name} parameters")
+                logger.debug(f"PUT URL: {url}, body: {body}")
 
-                    try:
-                        if not module.check_mode:
-                            resp = cc._put(url, json=body)
-                            param_result["response"] = resp.json()
-                            param_result["debug_info"]["status_code"] = resp.status_code
-                            param_result["changed"] = True
-                            any_changed = True
-                            logger.info(f"Edited profile parameters for {profile_name}")
-                            logger.debug(f"Response: {param_result['response']}")
-                    except Exception as e:
-                        param_result["debug_info"]["error"] = str(e)
-                        logger.error(f"Failed to edit profile parameters {profile_name}: {str(e)}")
+                try:
+                    if not module.check_mode:
+                        resp = cc._put(url, json=body)
+                        param_result["response"] = resp.json()
+                        param_result["debug_info"]["status_code"] = resp.status_code
+                        param_result["changed"] = True
+                        any_changed = True
+                        # Map numeric to string after API call
+                        for key in REVERSE_VALUE_MAP:
+                            if key in param_result["parameters"]:
+                                num_val = param_result["parameters"][key]
+                                param_result["parameters"][key] = REVERSE_VALUE_MAP[key].get(num_val, num_val)
+                        logger.info(f"Profile parameters for {profile_name} updated")
+                        logger.debug(f"Response: {param_result['response']}")
+                except Exception as e:
+                    param_result["debug_info"]["error"] = str(e)
+                    logger.error(f"Failed to edit profile parameters {profile_name}: {str(e)}")
 
-                    result["results"].append(param_result)
-                    debug_info["profiles"].append(param_result["debug_info"])
+                result["results"].append(param_result)
+                debug_info["profiles"].append(param_result["debug_info"])
 
-            # ---- Attach protections to profile ----
+            # Attach protections to profile
             for protection_name in protections:
                 prof_result = dict(changed=False, response={}, debug_info={}, parameters={})
-                body = {
-                    "rsIDSSynProfilesName": profile_name,
-                    "rsIDSSynProfileServiceName": protection_name,
-                }
-
+                body = {"rsIDSSynProfilesName": profile_name, "rsIDSSynProfileServiceName": protection_name}
                 path = f"/mgmt/device/byip/{dp_ip}/config/rsIDSSynProfilesTable/{profile_name}/{protection_name}"
                 url = f"https://{provider['cc_ip']}{path}"
                 prof_result["debug_info"].update({"method": "POST", "uri": url, "body": body})
 
-                logger.info(
-                    f"Attaching protection {protection_name} to SYN profile {profile_name} on device {dp_ip}"
-                )
+                logger.info(f"Attaching protection {protection_name} to profile {profile_name}")
                 logger.debug(f"POST URL: {url}, body: {body}")
 
                 try:
@@ -183,13 +179,9 @@ def run_module():
                         prof_result["debug_info"]["status_code"] = resp.status_code
                         prof_result["changed"] = True
                         any_changed = True
-                        logger.info(f"Attached protection {protection_name} to profile {profile_name}")
-                        logger.debug(f"Response: {prof_result['response']}")
                 except Exception as e:
                     prof_result["debug_info"]["error"] = str(e)
-                    logger.error(
-                        f"Failed to attach protection {protection_name} to profile {profile_name}: {str(e)}"
-                    )
+                    logger.error(f"Failed to attach protection {protection_name} to profile {profile_name}: {str(e)}")
 
                 result["results"].append(prof_result)
                 debug_info["profiles"].append(prof_result["debug_info"])
