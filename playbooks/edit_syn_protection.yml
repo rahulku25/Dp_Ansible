@@ -7,89 +7,97 @@
     - ../vars/edit_vars.yml
 
   tasks:
-    - name: Edit SYN protections block
-      block:
 
-        - name: Lock device(s)
-          dp_lock:
-            provider: "{{ cc }}"
-            dp_ip: "{{ item }}"
-          loop: "{{ dp_ip }}"
-          when: not (skip_device_lock | default(false))
+    - name: Lock device(s)
+      dp_lock:
+        provider: "{{ cc }}"
+        dp_ip: "{{ item }}"
+      loop: "{{ dp_ip | default([]) }}"
+      loop_control:
+        label: "Locking device: {{ item }}"
+      when: not (skip_device_lock | default(false))
 
-        - name: Edit SYN protections and profiles
-          edit_syn_configuration:
-            provider: "{{ cc }}"
-            dp_ip: "{{ item }}"
-            edit_syn_protections: "{{ edit_syn_protections | default([]) }}"
-            edit_syn_profiles: "{{ edit_syn_profiles | default([]) }}"
-          loop: "{{ dp_ip }}"
-          loop_control:
-            label: "Device: {{ item }}"
-          register: syn_edit_results
+    - name: Edit SYN protections and profiles
+      edit_syn_configuration:
+        provider: "{{ cc }}"
+        dp_ip: "{{ item }}"
+        syn_protections: "{{ edit_syn_protections | default([]) }}"
+        syn_profiles: "{{ edit_syn_profiles | default([]) }}"
+      loop: "{{ dp_ip | default([]) }}"
+      loop_control:
+        label: "Device: {{ item }}"
+      register: syn_edit_results
+      ignore_errors: true
+      when: (edit_syn_profiles is defined and edit_syn_profiles | length > 0) or
+            (edit_syn_protections is defined and edit_syn_protections | length > 0)
 
-        - name: Display SYN edit results (formatted)
-          vars:
-            syn_param_map:
-              rsIDSSYNAttackActivationThreshold: "activation_threshold"
-              rsIDSSYNAttackTerminationThreshold: "termination_threshold"
-              rsIDSSYNDestinationAppPortGroup: "app_port_group"
-              rsIDSSynProfilesName: "profile_name"
-              rsIDSSynProfileServiceName: "protection_name"
-              rsIDSSynProfilesParamsAuthType: "auth_type"
-              rsIDSSynProfilesParamsWebEnable: "web_enable"
-              rsIDSSynProfilesParamsWebMethod: "web_method"
-              rsIDSSynProfileTCPResetStatus: "tcp_reset_status"
-              rsIDSSynProfilesSSLMitigationStatus: "ssl_mitigation_status"
-              rsIDSSynProfilesAction: "action"
-              rsIDSSynProfileTrackingMode: "tracking_mode"
-              rsIDSSynProfileDestinationPorts: "destination_ports"
-              rsIDSSynProfileActivationMode: "activation_mode"
-              rsIDSSynProfilesActivationThreshold: "profile_activation_threshold"
+    - name: Display SYN edit results
+      vars:
+        response: "{{ item.response | default({}) }}"
+        profiles: "{{ response.edited_profiles | default([]) }}"
+        protections: "{{ response.edited_protections | default([]) }}"
+        errors: "{{ response.errors | default([]) }}"
+        formatted_output: |
+          **Device: {{ item.item }}**
 
-            formatted_output: |
-              Device: {{ item.item }}
-              {% if item.failed | default(false) %}
-              Error occurred:
-                - {{ item.msg | default('Unknown error') }}
-              {% elif item.results | length > 0 %}
-              SYN Configurations Edited:
-              {% for r in item.results %}
-                {% set body = r.debug_info.body if r.debug_info.body is defined else {} %}
-                {% if body %}
-                - {{ 'Protection' if body.get('rsIDSSYNAttackActivationThreshold') is defined else 'Profile' }}:
-                  {% for k, v in body.items() %}
-                    * {{ syn_param_map[k] | default(k) }}: {{ v }}
-                  {% endfor %}
-                {% else %}
-                - No changes applied
-                {% endif %}
+          EXECUTION RESULTS:
+
+          {% if profiles %}
+          **SYN Profiles Edited ({{ profiles | length }}):**
+          {% for prof in profiles %}
+            - **Profile Name:** {{ prof.name }}
+              {% if prof.user_friendly is defined %}
+              Parameters:
+              {% for k, v in prof.user_friendly.items() %}
+                - {{ k | replace('_',' ') | capitalize }}: {{ v }}
               {% endfor %}
-              {% else %}
-              No SYN protections/profiles were updated.
               {% endif %}
-          ansible.builtin.debug:
-            msg: "{{ formatted_output.split('\n') }}"
-          loop: "{{ syn_edit_results.results }}"
-          loop_control:
-            label: "Device: {{ item.item }}"
+              {% if prof.error is defined %}
+              - Error: {{ prof.error }}
+              {% endif %}
+          {% endfor %}
+          {% else %}
+          No profiles were edited.
+          {% endif %}
 
-        - name: Apply policy updates per device
-          update_policies:
-            provider: "{{ cc }}"
-            dp_ip: "{{ item }}"
-          loop: "{{ dp_ip }}"
-          loop_control:
-            label: "Applying policies: {{ item }}"
-          when:
-            - not (skip_policy_updates | default(false))
-            - syn_edit_results is defined
-            - syn_edit_results.changed | default(false)
+          {% if protections %}
+          **SYN Protections Edited ({{ protections | length }}):**
+          {% for prot in protections %}
+            - **Protection Name:** {{ prot.name }}
+              {% if prot.user_friendly is defined %}
+              Parameters:
+              {% for k, v in prot.user_friendly.items() %}
+                - {{ k | replace('_',' ') | capitalize }}: {{ v }}
+              {% endfor %}
+              {% endif %}
+              {% if prot.error is defined %}
+              - Error: {{ prot.error }}
+              {% endif %}
+          {% endfor %}
+          {% else %}
+          No protections were edited.
+          {% endif %}
 
-      always:
-        - name: Unlock device(s)
-          dp_unlock:
-            provider: "{{ cc }}"
-            dp_ip: "{{ item }}"
-          loop: "{{ dp_ip }}"
-          when: not (skip_device_lock | default(false))
+          {% if errors %}
+          **Errors Detected ({{ errors | length }}):**
+          {% for err in errors %}
+            - {{ err }}
+          {% endfor %}
+          {% else %}
+          No device-level errors detected.
+          {% endif %}
+      ansible.builtin.debug:
+        msg: "{{ formatted_output.split('\n') }}"
+      loop: "{{ syn_edit_results.results | default([]) }}"
+      loop_control:
+        label: "Device: {{ item.item }}"
+
+    - name: Unlock device(s)
+      dp_unlock:
+        provider: "{{ cc }}"
+        dp_ip: "{{ item }}"
+      loop: "{{ dp_ip | default([]) }}"
+      loop_control:
+        label: "Unlocking device: {{ item }}"
+      failed_when: false
+      when: not (skip_device_lock | default(false))

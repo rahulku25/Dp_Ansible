@@ -88,8 +88,8 @@ def run_module():
         FIELD_MAP = {
             "profile_type": "rsIDSSynProfileType",
             "auth_type": "rsIDSSynProfilesParamsAuthType",
-            "web_enable": "rsIDSSynProfilesParamsWebEnable",
-            "web_method": "rsIDSSynProfilesParamsWebMethod",
+            "http_enable": "rsIDSSynProfilesParamsWebEnable",
+            "http_method": "rsIDSSynProfilesParamsWebMethod",
             "tcp_reset_status": "rsIDSSynProfileTCPResetStatus",
             "ssl_mitigation_status": "rsIDSSynProfilesSSLMitigationStatus",
             "action": "rsIDSSynProfilesAction",
@@ -102,8 +102,8 @@ def run_module():
         VALUE_MAP = {
             "profile_type": {"syn_protection": 4},
             "auth_type": {"safe_reset": 1, "transparent_proxy": 2},
-            "web_enable": {"enable": 1, "disable": 2},
-            "web_method": {"redirect": 1, "javascript": 2},
+            "http_enable": {"enable": 1, "disable": 2},
+            "http_method": {"redirect": 1, "javascript": 2},
             "tcp_reset_status": {"enable": 1, "disable": 2},
             "ssl_mitigation_status": {"enable": 1, "disable": 2},
             "action": {"report_only": 0, "block_and_report": 1},
@@ -155,9 +155,9 @@ def run_module():
                 activation_mode_val = str(params.get("activation_mode", "continuous")).lower()
 
                 for key, val in params.items():
-                    # Web method only if web_enable is "enable"
-                    if key == "web_method" and str(params.get("web_enable")).lower() != "enable":
-                        logger.debug(f"Skipping web_method for profile '{profile_name}' because web_enable is not enabled")
+                    # http method only if http_enable is "enable"
+                    if key == "http_method" and str(params.get("http_enable")).lower() != "enable":
+                        logger.debug(f"Skipping http_method for profile '{profile_name}' because http_enable is not enabled")
                         continue
 
                     # Profile activation threshold: only if threshold_based
@@ -172,7 +172,7 @@ def run_module():
                         continue
 
                     # Auth fields only if tracking_mode is per_destination
-                    if key in ["auth_type", "web_enable", "web_method"] and tracking_mode_val != "per_destination":
+                    if key in ["auth_type", "http_enable", "http_method"] and tracking_mode_val != "per_destination":
                         profile_output_params[key] = f"skipped (tracking_mode={tracking_mode_val})"
                         logger.debug(f"Skipping auth field '{key}' for profile '{profile_name}' (tracking_mode={tracking_mode_val})")
                         continue
