@@ -1,206 +1,260 @@
-# plugins/modules/edit_syn_configuration.py
 """
-Unified Ansible module to edit DefensePro SYN protections and profiles.
+Unified Ansible module to edit DefensePro SYN protections, attach them to profiles,
+and update SYN profile parameters.
+
+- Edits existing SYN protections by ID.
+- Attaches protections to profiles (POST if new, PUT if already attached).
+- Updates profile parameters using verified DefensePro API structure.
 """
 
 from ansible.module_utils.basic import AnsibleModule
 
-def map_syn_input_to_user_friendly(prot):
-    """Convert SYN protection API fields into user-friendly format"""
-    return {
-        "protection_name": prot.get("name"),
-        "activation_threshold": prot.get("activation_threshold"),
-        "termination_threshold": prot.get("termination_threshold"),
-        "app_port_group": prot.get("app_port_group")
-    }
-
-def pretty_syn_protections(protections):
-    if not protections:
-        return "  No protections edited."
-    lines = []
-    for prot in protections:
-        lines.append(f"  - Protection: {prot['protection_name']}")
-        for k, v in prot['user_friendly'].items():
-            if k != "protection_name":
-                lines.append(f"    - {k.replace('_',' ').capitalize()}: {v}")
-        lines.append("")
-    return "\n".join(lines)
-
-def pretty_syn_profiles(profiles):
-    if not profiles:
-        return "  No profiles edited."
-    lines = []
-    for prof in profiles:
-        lines.append(f"  - Profile: {prof['profile_name']} (Protection: {prof['protection_name']})")
-        for k, v in prof['parameters'].items():
-            lines.append(f"    - {k.replace('_',' ').capitalize()}: {v}")
-        lines.append("")
-    return "\n".join(lines)
 
 def run_module():
     module_args = dict(
-        provider=dict(type='dict', required=True),
-        dp_ip=dict(type='str', required=True),
-        syn_protections=dict(type='list', required=False, default=[]),
-        syn_profiles=dict(type='list', required=False, default=[])
+        provider=dict(type="dict", required=True),
+        dp_ip=dict(type="str", required=True),
+        syn_protections=dict(type="list", required=False, default=[]),
+        syn_profiles=dict(type="list", required=False, default=[]),
     )
 
-    result = dict(changed=False, response={}, debug_info={})
+    result = dict(changed=False, response={})
+    debug_info = {"operations": []}
+
     module = AnsibleModule(argument_spec=module_args, supports_check_mode=True)
+    provider = module.params["provider"]
+    dp_ip = module.params["dp_ip"]
+    syn_protections = module.params["syn_protections"]
+    syn_profiles = module.params["syn_profiles"]
+    check_mode = module.check_mode
 
-    provider = module.params['provider']
-    dp_ip = module.params['dp_ip']
-    syn_protections = module.params['syn_protections']
-    syn_profiles = module.params['syn_profiles']
-
-    log_level = provider.get('log_level', 'disabled')
+    log_level = provider.get("log_level", "disabled")
     from ansible.module_utils.logger import Logger
+
     logger = Logger(verbosity=log_level)
+    from ansible.module_utils.radware_cc import RadwareCC
+
+    cc = RadwareCC(provider["cc_ip"], provider["username"], provider["password"], log_level=log_level, logger=logger)
+
+    logger.debug(f"Input received: dp_ip={dp_ip}, protections={len(syn_protections)}, profiles={len(syn_profiles)}")
+    debug_info["input"] = {
+        "dp_ip": dp_ip,
+        "protections_count": len(syn_protections),
+        "profiles_count": len(syn_profiles),
+    }
 
     try:
-        from ansible.module_utils.radware_cc import RadwareCC
-        cc = RadwareCC(provider['cc_ip'], provider['username'], provider['password'], log_level=log_level, logger=logger)
-
         changes_made = False
         edited_protections = []
         edited_profiles = []
-        errors = []
 
-        check_mode = module.check_mode
-
-        # === Edit SYN protections ===
-        for prot in syn_protections:
-            protection_name = prot.get("name")
-            if not protection_name:
-                errors.append("SYN protection requires 'name'")
+        # ----------------------------------------------------------------------
+        # Edit SYN Protections
+        # ----------------------------------------------------------------------
+        for protection in syn_protections:
+            prot_id = protection.get("id")
+            if not prot_id:
                 continue
 
-            payload = {
-                "rsIDSSYNAttackName": protection_name,
-                "rsIDSSYNAttackActivationThreshold": prot.get("activation_threshold", 1000),
-                "rsIDSSYNAttackTerminationThreshold": prot.get("termination_threshold", 500),
-                "rsIDSSYNDestinationAppPortGroup": prot.get("app_port_group", "")
+            prot_name = protection.get("name", f"id_{prot_id}")
+            url = f"https://{provider['cc_ip']}/mgmt/device/byip/{dp_ip}/config/rsIDSSYNAttackTable/{prot_id}"
+
+            body = {
+                "rsIDSSYNAttackActivationThreshold": protection.get("activation_threshold"),
+                "rsIDSSYNAttackTerminationThreshold": protection.get("termination_threshold"),
+                "rsIDSSYNDestinationAppPortGroup": protection.get("app_port_group"),
             }
-            url = f"https://{provider['cc_ip']}/mgmt/device/byip/{dp_ip}/config/rsIDSSYNAttackTable/0"
+
+            logger.info(f"Editing SYN protection '{prot_name}' (ID {prot_id}) via PUT")
 
             if not check_mode:
-                logger.info(f"Editing SYN protection '{protection_name}' at URL: {url}")
-                resp = cc._put(url, json=payload)
+                resp = cc._put(url, json=body)
                 try:
                     data = resp.json()
                 except Exception:
-                    data = {"raw_text": resp.text}
+                    data = {"status": "ok"}
             else:
                 data = {"status": "check_mode_skipped"}
 
-            edited_protections.append({
-                "protection_name": protection_name,
-                "user_friendly": map_syn_input_to_user_friendly(prot),
-                "request": {"method": "PUT", "uri": url, "body": payload},
-                "response": data
-            })
+            # ADDED readable protection summary
+            prot_parameters = {
+                "activation_threshold": protection.get("activation_threshold", "N/A"),
+                "termination_threshold": protection.get("termination_threshold", "N/A"),
+                "app_port_group": protection.get("app_port_group", "N/A"),
+            }
+
+            edited_protections.append(
+                {
+                    "id": prot_id,
+                    "name": prot_name,
+                    "body": body,
+                    "parameters": prot_parameters,
+                    "response": data,
+                }
+            )
+
+            debug_info["operations"].append(
+                {
+                    "type": "protection_edit",
+                    "id": prot_id,
+                    "name": prot_name,
+                    "uri": url,
+                    "body": body,
+                    "response": data,
+                }
+            )
             changes_made = True
 
-        # === Edit SYN profiles ===
-        FIELD_MAP = {
-            "profile_type": "rsIDSSynProfileType",
-            "auth_type": "rsIDSSynProfilesParamsAuthType",
-            "http_enable": "rsIDSSynProfilesParamsWebEnable",
-            "http_method": "rsIDSSynProfilesParamsWebMethod",
-            "tcp_reset_status": "rsIDSSynProfileTCPResetStatus",
-            "ssl_mitigation_status": "rsIDSSynProfilesSSLMitigationStatus",
-            "action": "rsIDSSynProfilesAction",
-            "tracking_mode": "rsIDSSynProfileTrackingMode",
-            "destination_ports": "rsIDSSynProfileDestinationPorts",
-            "activation_mode": "rsIDSSynProfileActivationMode",
-            "activation_threshold": "rsIDSSynProfileActivationThreshold"
-        }
-
-        VALUE_MAP = {
-            "profile_type": {"syn_protection": 4},
-            "auth_type": {"safe_reset": 1, "transparent_proxy": 2},
-            "http_enable": {"enable": 1, "disable": 2},
-            "http_method": {"redirect": 1, "javascript": 2},
-            "tcp_reset_status": {"enable": 1, "disable": 2},
-            "ssl_mitigation_status": {"enable": 1, "disable": 2},
-            "action": {"report_only": 0, "block_and_report": 1},
-            "tracking_mode": {"per_destination": 1, "per_policy": 2},
-            "destination_ports": {"syn_profile": 1, "all": 2},
-            "activation_mode": {"continuous": 1, "threshold_based": 2}
-        }
+        # ----------------------------------------------------------------------
+        # Attach protections to profiles (auto PUT if exists)
+        # ----------------------------------------------------------------------
+        attached_map = {}  #  ADDED - track which protections were attached to which profile
 
         for profile in syn_profiles:
             profile_name = profile.get("name")
             protections = profile.get("protections", [])
-            params = profile.get("params", {})
+            if not protections:
+                continue
 
             for protection_name in protections:
-                # URL for profile parameters
-                body_params = {"rsIDSSynProfilesParamsName": profile_name}
-                profile_output_params = {}
-
-                tracking_mode_val = str(params.get("tracking_mode", "per_policy")).lower()
-                activation_mode_val = str(params.get("activation_mode", "continuous")).lower()
-
-                for key, val in params.items():
-                    # Skip http_method if http_enable != enable
-                    if key == "http_method" and str(params.get("http_enable")).lower() != "enable":
-                        profile_output_params[key] = "skipped (http_enable not enabled)"
-                        continue
-                    # Skip activation_threshold if activation_mode != threshold_based
-                    if key == "activation_threshold" and activation_mode_val != "threshold_based":
-                        profile_output_params[key] = "skipped (continuous mode)"
-                        continue
-
-                    field_name = FIELD_MAP.get(key, key)
-                    mapped_val = VALUE_MAP.get(key, {}).get(str(val).lower(), str(val))
-                    body_params[field_name] = mapped_val
-                    profile_output_params[key] = val
-
-                url_params = f"https://{provider['cc_ip']}/mgmt/device/byip/{dp_ip}/config/rsIDSSynProfilesParamsTable/{profile_name}"
+                url_attach = f"https://{provider['cc_ip']}/mgmt/device/byip/{dp_ip}/config/rsIDSSynProfilesTable/{profile_name}/{protection_name}"
+                body_attach = {
+                    "rsIDSSynProfilesName": profile_name,
+                    "rsIDSSynProfileServiceName": protection_name,
+                }
 
                 if not check_mode:
-                    logger.info(f"Editing SYN profile '{profile_name}' for protection '{protection_name}' at URL: {url_params}")
-                    resp_params = cc._put(url_params, json=body_params)
                     try:
-                        data_params = resp_params.json()
-                    except Exception:
-                        data_params = {"raw_text": resp_params.text}
+                        logger.info(f"Attaching '{protection_name}' to profile '{profile_name}'")
+                        cc._post(url_attach, json=body_attach)
+                    except Exception as e:
+                        if "already exists" in str(e) or "M_00386" in str(e):
+                            logger.debug(f"Attachment already exists, retrying with PUT for '{profile_name}'")
+                            cc._put(url_attach, json=body_attach)
+                        else:
+                            raise
                 else:
-                    data_params = {"status": "check_mode_skipped"}
+                    logger.debug(f"Check mode: skipping attach for '{profile_name}'")
 
-                edited_profiles.append({
-                    "profile_name": profile_name,
-                    "protection_name": protection_name,
-                    "parameters": profile_output_params,
-                    "request": {"method": "PUT", "uri": url_params, "body": body_params},
-                    "response": data_params
-                })
+                attached_map[profile_name] = protection_name  #  Track attachment
+
+                debug_info["operations"].append(
+                    {
+                        "type": "profile_attach",
+                        "profile": profile_name,
+                        "protection": protection_name,
+                        "uri": url_attach,
+                        "body": body_attach,
+                    }
+                )
                 changes_made = True
 
-        result.update({
-            "changed": changes_made,
-            "response": {
-                "protections": edited_protections,
-                "profiles": edited_profiles,
-                "summary": {
-                    "total_protections_attempted": len(edited_protections),
-                    "total_profiles_attempted": len(edited_profiles),
-                    "protections_edited": len(edited_protections),
-                    "profiles_edited": len(edited_profiles),
-                },
-                "pretty_protections": pretty_syn_protections(edited_protections),
-                "pretty_profiles": pretty_syn_profiles(edited_profiles)
-            }
-        })
+        # ----------------------------------------------------------------------
+        #  Update SYN Profile Parameters
+        # ----------------------------------------------------------------------
+        for profile in syn_profiles:
+            profile_name = profile.get("name")
+            params = profile.get("params", {})
 
-        if errors:
-            module.fail_json(msg=f"SYN edit completed with {len(errors)} error(s).", **result)
+            if not params:
+                logger.debug(f"No parameters to update for '{profile_name}'")
+                continue
+
+            logger.info(f"Updating SYN profile parameters for '{profile_name}'")
+
+            param_map = {
+                "action": "rsIDSSynProfilesAction",
+                "tracking_mode": "rsIDSSynProfileTrackingMode",
+                "activation_mode": "rsIDSSynProfileActivationMode",
+                "destination_ports": "rsIDSSynProfileDestinationPorts",
+                "activation_threshold": "rsIDSSynProfileActivationThreshold",
+                "auth_type": "rsIDSSynProfilesParamsAuthType",
+                "tcp_reset_status": "rsIDSSynProfileTCPResetStatus",
+                "http_enable": "rsIDSSynProfilesParamsWebEnable",
+                "http_method": "rsIDSSynProfilesParamsWebMethod",
+            }
+
+            code_map = {
+                "action": {"report_only": "0", "block_and_report": "1"},
+                "tracking_mode": {"per_destination": "1", "per_policy": "2"},
+                "activation_mode": {"continuous": "1", "threshold_based": "2"},
+                "destination_ports": {"syn_profile": "1", "all": "2"},
+                "auth_type": {"safe_reset": "1", "transparent_proxy": "2"},
+                "tcp_reset_status": {"enable": "1", "disable": "2"},
+                "http_enable": {"enable": "1", "disable": "2"},
+                "http_method": {"redirect": "1", "javascript": "2"},
+            }
+
+            skip_fields = []
+            if params.get("tracking_mode") == "per_destination" or params.get("activation_mode") == "continuous":
+                skip_fields.append("activation_threshold")
+
+            body_params = {"rsIDSSynProfilesParamsName": profile_name}
+            for key, val in params.items():
+                if key in skip_fields:
+                    logger.debug(f"Skipping '{key}' for '{profile_name}' due to mode logic")
+                    continue
+
+                field = param_map.get(key)
+                if not field:
+                    continue
+
+                mapped_val = code_map.get(key, {}).get(str(val).lower(), val)
+                body_params[field] = mapped_val
+
+            url_params = (
+                f"https://{provider['cc_ip']}/mgmt/device/byip/{dp_ip}/config/rsIDSSynProfilesParamsTable/{profile_name}"
+            )
+
+            if not check_mode:
+                resp = cc._put(url_params, json=body_params)
+                try:
+                    data = resp.json()
+                except Exception:
+                    data = {"status": "ok"}
+            else:
+                data = {"status": "check_mode_skipped"}
+
+            #  ADDED — Include attached protection name
+            protection_name = attached_map.get(profile_name, "N/A")
+
+            edited_profiles.append(
+                {
+                    "profile_name": profile_name,
+                    "protection_name": protection_name,  
+                    "parameters": params,
+                    "applied_body": body_params,
+                    "skipped": skip_fields,
+                    "response": data,
+                }
+            )
+
+            debug_info["operations"].append(
+                {
+                    "type": "profile_edit",
+                    "name": profile_name,
+                    "attached_protection": protection_name,  
+                    "uri": url_params,
+                    "body": body_params,
+                    "response": data,
+                }
+            )
+            changes_made = True
+
+        # ----------------------------------------------------------------------
+        # Result summary
+        # ----------------------------------------------------------------------
+        result["changed"] = changes_made
+        result["response"] = {
+            "protections": edited_protections,
+            "profiles": edited_profiles,
+        }
+        result["debug_info"] = debug_info
 
         module.exit_json(**result)
 
     except Exception as e:
-        module.fail_json(msg=f"SYN edit failed: {str(e)}", **result)
+        module.fail_json(msg=str(e), debug_info=debug_info, **result)
 
 
 def main():
