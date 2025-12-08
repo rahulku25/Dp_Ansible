@@ -443,6 +443,15 @@ ORCHESTRATION LAYER
 | **Delete SSL Object** | DELETE | `/mgmt/device/byip/{dp_ip}/config/rsProtectedSslObjTable/{ssl_object_name}` |
 | **Get SSL Object**    | GET    | `/mgmt/device/byip/{dp_ip}/config/rsProtectedSslObjTable/{ssl_object_name}` |
 
+### SYN Profile Management
+| Operation | Method | Endpoint |
+|-----------|--------|----------|
+| **Create SYN Profile**                             | `POST`   | `/mgmt/device/byip/{dp_ip}/config/rsIDSSynProfilesTable/{profile_name}` |
+| **Edit SYN Profile (Attach/Detach Protections)**   | `PUT`    | `/mgmt/device/byip/{dp_ip}/config/rsIDSSynProfilesTable/{profile_name}` |
+| **Delete SYN Profile**                             | `DELETE` | `/mgmt/device/byip/{dp_ip}/config/rsIDSSynProfilesTable/{profile_name}` |
+| **Get SYN Profile Mapping (Protections Attached)** | `GET`    | `/mgmt/device/byip/{dp_ip}/config/rsIDSSynProfilesTable/{profile_name}` |
+
+
 ### Traffic Filter Management
 | Operation | Method | Endpoint |
 |-----------|--------|----------|

@@ -338,54 +338,100 @@ edit_https_profiles:
 #   full_session_decryption: enable / disable
 
 ################################## SYN Protections Variables ###############################
-# Define SYN protections to edit
-# Each protection requires index (MANDATORY) to identify which protection to edit
-# Index can be found either by checking on DefensePro UI Protections -> SYN Flood protections menu
-# or by running get_syn_profiles.yml playbook
-# Only specify parameters you want to change - unspecified parameters remain unchanged
+
+# Each entry represents an existing DefensePro SYN Protection that will be updated.
+# The `id` must match the protection ID on the device.
+# Fields with new values will be updated; others will remain unchanged.
 
 edit_syn_protections:
-  - index: 500030                          # Protection index to edit (MANDATORY - starts from 500001)
-    activation_threshold: 3500             # SYN attack activation threshold 
-    termination_threshold: 2500            # SYN attack termination threshold 
-    app_port_group: "http"                 # Application port group - lowercase (http, https, etc.)
-  - index: 500051
-    activation_threshold: 4000
-    termination_threshold: 3000
-    app_port_group: "https"             
-    
+  - id: 500237                      # Unique protection ID (from DefensePro)
+    name: "SYN_PROT_1"              # Logical name for readability
+    activation_threshold: 4000      # New threshold to trigger SYN protection
+    termination_threshold: 1500     # Threshold to stop SYN protection
+    app_port_group: "http"          # Application port group (e.g., http, https)
+
+  - id: 500238
+    name: "SYN_PROT_2"
+    activation_threshold: 5000
+    termination_threshold: 2000
+    app_port_group: "https"
+
+
+# ------------------------------------------------------
+# 2️⃣ SYN Profiles to Edit (Attach/Detach + Parameters)
+# ------------------------------------------------------
+# Each profile section can:
+#   - Attach one or more SYN protections
+#   - Detach protections (if removed from the list)
+#   - Update behavioral parameters
+#
+# Notes:
+#   - Some parameters are conditionally skipped by the module based on logic.
+#   - Example: activation_threshold is ignored for tracking_mode=per_destination
+# ------------------------------------------------------
+
 edit_syn_profiles:
-  - name: "SYN_PROFILE_1"
+
+  # ======================
+  # Scenario 1
+  # tracking_mode: per_destination
+  # (activation_threshold will be auto-skipped)
+  # ======================
+  - name: "SYN_PROFILE_1"            # Profile name on DefensePro
     protections:
-      - "SYN_PROT_1"
+      - "SYN_PROT_1"                 # Protection(s) to attach
+    params:
+      action: "report_only"          # report_only or block_and_report
+      tracking_mode: "per_destination" # per_destination / per_policy
+      auth_type: "safe_reset"        # safe_reset / transparent_proxy
+      http_enable: "enable"          # enable or disable HTTP redirect
+      http_method: "redirect"        # redirect/javascript  /Note- valid only if http_enable = enable
+      tcp_reset_status: "disable"    # enable or disable TCP reset
+      activation_threshold: 2000     # skipped automatically for per_destination
+
+
+  # ======================
+  # Scenario 2
+  # tracking_mode: per_policy + threshold_based
+  # ======================
   - name: "SYN_PROFILE_2"
     protections:
-      - "SYN_PROT_2"
+      - "SYN_PROT_1"
+    params:
+      action: "report_only"
+      tracking_mode: "per_policy"
+      activation_mode: "threshold_based"
+      destination_ports: "all"       # all or syn_profile
+      activation_threshold: 3000     # valid for threshold_based mode
+      auth_type: "safe_reset"
+      tcp_reset_status: "disable"
 
-# Add the protections under syn profile  
-  # Example: Edit protection index 500031, changing only specific parameters
-  # - index: 500031                        # Another protection to edit
-  #   activation_threshold: 4000           # Only change activation threshold
-  #   termination_threshold: 3000          # Only change termination threshold
-  #   app_port_group: "https"              # Update app port group
-  #   packet_report: "disable"             # Update packet report setting
 
-  # Example: Edit protection index 500032, minimal changes
-  # - index: 500032
-  #   activation_threshold: 2000           # Only change activation threshold
-  #   # All other parameters remain unchanged
+  # # Scenario 3 – Multiple protections, per_policy + threshold_based + syn_profile
+  # - name: "SYN_PROFILE_3"
+  #   protections:
+  #     - "SYN_PROT_1"
+  #     - "SYN_PROT_2"
+  #   params:
+  #     action: "report_only"
+  #     tracking_mode: "per_policy"
+  #     activation_mode: "threshold_based"
+  #     destination_ports: "syn_profile"
+  #     activation_threshold: 2000
+  #     auth_type: "safe_reset"
+  #     tcp_reset_status: "disable"
 
-# Notes for SYN Protections:
-# - index: MANDATORY - identifies which protection to edit (get from DefensePro UI or get_syn_profiles.yml)
-#   SYN protection indexes typically start from 500001 and increment upward
-# - protection_name: Optional descriptive label for documentation
-# - Only specify parameters you want to change - unspecified parameters keep their current values
-# ALL SUPPORTED SYN Protection PARAMETERS with user-friendly values:
-# - activation_threshold: "number" (Activation threshold, e.g., "2500")
-# - termination_threshold: "number" (Termination threshold, e.g., "1500")
-# - app_port_group: "http", "https", "dns", "smtp", "ftp", "imap" or custom port, "" for all ports (must be lowercase)
-# - packet_report: "enable", "disable" (Detailed packet reporting)
-
+  # # Scenario 4 – Continuous activation mode (threshold skipped)
+  # - name: "SYN_PROFILE_4"
+  #   protections:
+  #     - "SYN_PROT_2"
+  #   params:
+  #     action: "report_only"
+  #     tracking_mode: "per_policy"
+  #     activation_mode: "continuous"
+  #     destination_ports: "syn_profile"
+  #     auth_type: "safe_reset"
+  #     tcp_reset_status: "disable"
 
 ########################## Traffic Filter Profiles & Protections ##########################
 # vars/edit_vars.yml

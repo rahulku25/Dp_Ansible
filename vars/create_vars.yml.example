@@ -293,61 +293,73 @@ create_ssl_objects:
 # bk_user_cipher: custom back-end cipher string
 # bk_end_port: back-end TCP port
 
-################################## SYN Protections Variables ###############################
-# Define SYN protections to create
-# Each protection must include protection_name (MANDATORY) and required thresholds
-# Protection_index is automatically assigned by DefensePro when creating new protections
-# Only specify parameters relevant to your protection - leave out what is not needed
+################## Create SYN Profiles and Protections ########################## 
 
+# ======================================================
+# Variables for SYN Protections and Profiles Creation
+# ======================================================
+# This file defines SYN Flood Protections and their associated Profiles
+# used by the Ansible playbook `create_syn_configuration.yml`.
+# Each protection corresponds to a specific mitigation threshold,
+# and each profile attaches protections with operational parameters.
+# ======================================================
+
+# -----------------------------
+# SYN Protections Definitions
+# -----------------------------
 create_syn_protections:
-  # Example: Create new SYN protection for HTTP
-  - name: "SYN_PROT_1"                       # Descriptive name (MANDATORY)
-    activation_threshold: "3500"             # Optional: SYN activation threshold (packets/sec) - string value
-    termination_threshold: "2500"            # Optional: SYN termination threshold (packets/sec) - string value
-    app_port_group: "http"                   # Application port group (http, https, smtp, dns, ftp, imap) or "" for all ports
+  # Protection 1: HTTP-based SYN flood protection
+  - name: "SYN_PROT_1"                      # Unique name for the SYN protection
+    activation_threshold: 2500              # Packets/sec 
+    termination_threshold: 1500             # Packets/sec 
+    app_port_group: "http"                  # http, https, dns, ftp,etc (leave empty for all ports)
 
-  - name: "SYN_PROT_2"                       # Descriptive name (MANDATORY)
-    activation_threshold: "3500"             # Optional: SYN activation threshold (packets/sec) - string value
-    termination_threshold: "2500"            # Optional: SYN termination threshold (packets/sec) - string value
-    app_port_group: "http"                   # Application port group (http, https, smtp, dns, ftp, imap) or "" for all ports  
+  # Protection 2: HTTPS-based SYN flood protection
+  - name: "SYN_PROT_2"
+    activation_threshold: 3000
+    termination_threshold: 2000
+    app_port_group: "https"
 
-# Define SYN profiles and attach protections
+# -----------------------------
+# SYN Profiles Definitions
+# -----------------------------
 create_syn_profiles:
-  - name: "SYN_PROFILE_1"
+  # --------------------------------------------------
+  # Profile 1 (SYN_PROFILE_1) 
+  # --------------------------------------------------
+  - name: "SYN_PROFILE_1"                   # Unique name for the SYN profile
     protections:
-      - "SYN_PROT_1"
+      - "SYN_PROT_1"                        # Attaches to the protection created above
+    params:
+      auth_type: "transparent_proxy"        # transparent_proxy / safe_reset
+      http_enable: "disable"                 # Web method disabled → web_method omitted
+      tcp_reset_status: "disable"           # TCP reset disabled → only report
+      ssl_mitigation_status: "disable"      # enable, disable
+      action: "report_only"                 # report_only / block_and_report
+      tracking_mode: "per_policy"           #  per policy/ per_destination (no web_method/app logic)
+      activation_threshold: 1500            # Optional: activation threshold (used for threshold-based mode)
+      destination_ports: "syn_profile"      # all /syn_profile (uses protection's port group)
+      activation_mode: "continuous"         # Continuous/threshold-based
+
+  # --------------------------------------------------
+  # Profile 2 (SYN_PROFILE_2) 
+  # --------------------------------------------------
   - name: "SYN_PROFILE_2"
     protections:
       - "SYN_PROT_2"
+    params:
+      auth_type: "safe_reset"               # transparent_proxy / safe_reset
+      http_enable: "enable"                  # Enables web-based mitigation controls
+      http_method: "redirect"                # redirect / javascript
+      tcp_reset_status: "enable"            # enable, disable
+      ssl_mitigation_status: "enable"       # enable, disable
+      action: "block_and_report"            # report_only / block_and_report
+      tracking_mode: "per_destination"      # Tracks per destination (required for web_enable usage)
+      activation_threshold: 2000            # SYN threshold for switching to mitigation
+      destination_ports: "all"              # all /syn_profile
+      activation_mode: "threshold_based"    # threshold-based / continuous
 
 
-# - The module `manage_syn_configuration` ensures idempotency.
-  # Example: Create new SYN protection for HTTPS
-  - name: "HTTPS SYN Protection"
-    activation_threshold: "4000"
-    termination_threshold: "3000"
-    app_port_group: "https"
-
-  # Example: Create minimal SYN protection with only mandatory parameters
-  # - name: "Basic SYN Prot"       # Only provide name + thresholds
-  #   activation_threshold: "2000"
-  #   termination_threshold: "1500"
-
-  # Add more protection entries as needed
-
-# Notes for SYN Protections:
-# - name: MANDATORY descriptive name for each protection
-# - DefensePro will auto-assign protection_index starting from 500030 (check using get_syn_protections.yml)
-# - Only specify parameters you want to configure — others will use DefensePro defaults
-# - ALL SUPPORTED SYN Protections PARAMETERS with user-friendly values:
-# - name: "string" (Unique descriptive name, mandatory)
-# - activation_threshold: "number" (packets/sec as string, e.g., "3000", "5000")
-# - termination_threshold: "number" (packets/sec as string, e.g., "2000", "4000")
-# - app_port_group: "http", "https", "smtp", "dns", "ftp", "imap" or "" for all ports (must be lowercase)
-# - packet_report: "enable", "disable" (Detailed packet reporting)
-### Notes for syn proile
-# - Each protection in syn_protections will be created first.
-# - Each profile in syn_profiles will attach the listed protections.
 
 ################################## HTTPS Profile Create Variables ###############################
 # Define HTTPS profiles to create

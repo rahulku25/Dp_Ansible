@@ -338,6 +338,18 @@ ansible-playbook playbooks/edit_traffic_filter.yml
 # Delete Traffic Filter
 ansible-playbook playbooks/delete_traffic_filter.yml
 
+# Get all SYN profiles & Ptotection from devices
+ansible-playbook playbooks/get_syn_profile.yml
+
+# Create new SYN profiles & Protection
+ansible-playbook playbooks/create_syn_profile.yml
+
+# Edit existing SYN profiles
+ansible-playbook playbooks/edit_syn_protection.yml
+
+# Delete SYN profiles
+ansible-playbook playbooks/delete_syn_profile.yml
+
 # Security Policy Creation (using vars/create_vars.yml configuration)
 ansible-playbook playbooks/create_full_config.yml
 
