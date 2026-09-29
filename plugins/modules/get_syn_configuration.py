@@ -5,6 +5,56 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.logger import Logger
 from ansible.module_utils.radware_cc import RadwareCC
 
+FIELD_MAP = {
+    "rsIDSSynProfilesAction": "action",
+    "rsIDSSynProfileDestinationPorts": "destination_ports",
+    "rsIDSSynProfileActivationMode": "activation_mode",
+    "rsIDSSynProfileActivationThreshold": "activation_threshold",
+    "rsIDSSynProfileTerminationThreshold": "termination_threshold",
+    "rsIDSSynProfileTCPResetStatus": "tcp_reset_status",
+    "rsIDSSynProfilesParamsAuthType": "auth_type",
+}
+
+VALUE_MAPS = {
+    "action": {"0": "report_only", "1": "block_and_report"},
+    "destination_ports": {"1": "syn_profile", "2": "all"},
+    "activation_mode": {"1": "continuous", "2": "threshold_based"},
+    "tcp_reset_status": {"1": "enable", "2": "disable"},
+    "auth_type": {"1": "safe_reset", "2": "transparent_proxy"},
+}
+
+
+def is_not_applicable(key, params):
+    """Report whether a visible DefensePro 10.10.1 control is unavailable."""
+    if key == "tcp_reset_status":
+        auth_type = str(params.get("auth_type") or "safe_reset").strip().lower()
+        return auth_type != "safe_reset"
+    return False
+
+
+def format_syn_params_for_display(raw_profile_params):
+    """Convert raw SYN profile parameters to user-friendly format."""
+    formatted = {}
+    for api_field, user_field in FIELD_MAP.items():
+        value = raw_profile_params.get(api_field)
+        if value is None or str(value).strip() == "":
+            continue
+
+        if user_field in ("activation_threshold", "termination_threshold"):
+            try:
+                formatted[user_field] = int(value)
+            except (TypeError, ValueError):
+                formatted[user_field] = value
+            continue
+
+        formatted[user_field] = VALUE_MAPS.get(user_field, {}).get(str(value).strip(), value)
+
+    return {
+        key: "not_applicable" if is_not_applicable(key, formatted) else formatted.get(key, "N/A")
+        for key in FIELD_MAP.values()
+    }
+
+
 def run_module():
     module_args = dict(
         provider=dict(type='dict', required=True),
@@ -20,18 +70,7 @@ def run_module():
     log_level = provider.get('log_level', 'disabled')
     logger = Logger(verbosity=log_level)
 
-    # Mappings for user-friendly values
-    auth_type_map = {1: "safe_reset", 2: "transparent_proxy"}
-    http_auth_status = {1: "enable", 2: "disable"}
-    http_auth_method = {1: "redirect", 2: "javaScript"}
-    tcp_reset_map = {1: "enable", 2: "disable"}
-    ssl_mitigation_map = {1: "enable", 2: "disable"}
-    action_map = {0: "report_only", 1: "block_and_report"}
-    tracking_mode_map = {1: "per_destination", 2: "per_policy"}
-    destination_ports_map = {1: "syn_profile", 2: "all"}
-    activation_mode_map = {1: "continuous", 2: "threshold_based"}
-
-    result = dict(changed=False, profiles=[], debug_info={})
+    result = dict(changed=False, profiles=[], protections=[], debug_info={})
     debug_info = {}
 
     try:
@@ -57,6 +96,13 @@ def run_module():
             prot_json = {}
         syn_protections = prot_json.get('rsIDSSYNAttackTable', [])
         prot_by_name = {p.get('rsIDSSYNAttackName'): p for p in syn_protections}
+        result['protections'] = [{
+            'protection_name': protection.get('rsIDSSYNAttackName'),
+            'protection_id': protection.get('rsIDSSYNAttackId'),
+            'activation_threshold': protection.get('rsIDSSYNAttackActivationThreshold'),
+            'termination_threshold': protection.get('rsIDSSYNAttackTerminationThreshold'),
+            'app_port_group': protection.get('rsIDSSYNDestinationAppPortGroup')
+        } for protection in syn_protections]
         debug_info['syn_protections_count'] = len(syn_protections)
 
         # ---------------- Fetch SYN Profiles ----------------
@@ -92,44 +138,30 @@ def run_module():
 
         # ---------------- Build structured output ----------------
         all_profiles = []
+        profiles_by_name = {}
         for profile in syn_profiles:
             profile_name = profile.get('rsIDSSynProfilesName', 'DEFAULT_PROFILE')
             protection_name = profile.get('rsIDSSynProfileServiceName')
 
-            # Profile info
-            profile_info = {'profile_name': profile_name}
+            profile_struct = profiles_by_name.get(profile_name)
+            if profile_struct is None:
+                profile_struct = {
+                    'profile': {'profile_name': profile_name},
+                    'protections': [],
+                    'parameters': format_syn_params_for_display(params_by_name.get(profile_name, {}))
+                }
+                profiles_by_name[profile_name] = profile_struct
+                all_profiles.append(profile_struct)
 
-            # Protections (list of dicts)
-            prot_details = prot_by_name.get(protection_name, {})
-            protections = [{
-                'protection_name': protection_name,
-                'protection_id': prot_details.get('rsIDSSYNAttackId'),
-                'activation_threshold': prot_details.get('rsIDSSYNAttackActivationThreshold'),
-                'termination_threshold': prot_details.get('rsIDSSYNAttackTerminationThreshold'),
-                'app_port_group': prot_details.get('rsIDSSYNDestinationAppPortGroup')
-            }]
-
-            # Parameters (user-friendly)
-            params_raw = params_by_name.get(profile_name, {})
-            parameters = {
-                'AuthType': auth_type_map.get(int(params_raw.get('rsIDSSynProfilesParamsAuthType', 1)), 'N/A'),
-                'WebEnable': http_auth_status.get(int(params_raw.get('rsIDSSynProfilesParamsWebEnable', 2)), 'N/A'),
-                'WebMethod': http_auth_method.get(int(params_raw.get('rsIDSSynProfilesParamsWebMethod', 1)), 'N/A'),
-                'TCPResetStatus': tcp_reset_map.get(int(params_raw.get('rsIDSSynProfileTCPResetStatus', 2)), 'N/A'),
-                'SSLMitigationStatus': ssl_mitigation_map.get(int(params_raw.get('rsIDSSynProfilesSSLMitigationStatus', 2)), 'N/A'),
-                'Action': action_map.get(int(params_raw.get('rsIDSSynProfilesAction', 1)), 'N/A'),
-                'TrackingMode': tracking_mode_map.get(int(params_raw.get('rsIDSSynProfileTrackingMode', 1)), 'N/A'),
-                'ActivationThreshold': int(params_raw.get('rsIDSSynProfileActivationThreshold', 1500)),
-                'DestinationPorts': destination_ports_map.get(int(params_raw.get('rsIDSSynProfileDestinationPorts', 1)), 'N/A'),
-                'ActivationMode': activation_mode_map.get(int(params_raw.get('rsIDSSynProfileActivationMode', 2)), 'N/A')
-            }
-
-            profile_struct = {
-                'profile': profile_info,
-                'protections': protections,
-                'parameters': parameters
-            }
-            all_profiles.append(profile_struct)
+            if protection_name:
+                prot_details = prot_by_name.get(protection_name, {})
+                profile_struct['protections'].append({
+                    'protection_name': protection_name,
+                    'protection_id': prot_details.get('rsIDSSYNAttackId'),
+                    'activation_threshold': prot_details.get('rsIDSSYNAttackActivationThreshold'),
+                    'termination_threshold': prot_details.get('rsIDSSYNAttackTerminationThreshold'),
+                    'app_port_group': prot_details.get('rsIDSSYNDestinationAppPortGroup')
+                })
 
         # Apply optional filtering
         if filter_syn_profile_names:

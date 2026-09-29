@@ -80,7 +80,10 @@
             provider: "{{ cc }}"
             dp_ip: "{{ item }}"
           loop: "{{ dp_ip }}"
-          when: not (skip_policy_updates | default(false))
+          when:
+            - not (skip_policy_updates | default(false))
+            - delete_results is defined
+            - delete_results.changed | default(false)
           loop_control:
             label: "Applying policies: {{ item }}"
 

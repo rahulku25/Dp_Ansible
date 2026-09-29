@@ -323,42 +323,58 @@ create_syn_protections:
 # -----------------------------
 # SYN Profiles Definitions
 # -----------------------------
+# Supported parameters (DefensePro 10.10.1 "SYN Protection Settings Per Policy"):
+#
+#   action, activation_threshold, termination_threshold, destination_ports,
+#   activation_mode, auth_type, tcp_reset_status
+# -----------------------------
 create_syn_profiles:
   # --------------------------------------------------
-  # Profile 1 (SYN_PROFILE_1) 
+  # Profile 1 (SYN_PROFILE_1)
+  # Spoofed SYN attack protection, continuous, TCP reset on
   # --------------------------------------------------
   - name: "SYN_PROFILE_1"                   # Unique name for the SYN profile
     protections:
       - "SYN_PROT_1"                        # Attaches to the protection created above
     params:
-      auth_type: "transparent_proxy"        # transparent_proxy / safe_reset
-      http_enable: "disable"                 # Web method disabled → web_method omitted
-      tcp_reset_status: "disable"           # TCP reset disabled → only report
-      ssl_mitigation_status: "disable"      # enable, disable
       action: "report_only"                 # report_only / block_and_report
-      tracking_mode: "per_policy"           #  per policy/ per_destination (no web_method/app logic)
-      activation_threshold: 1500            # Optional: activation threshold (used for threshold-based mode)
-      destination_ports: "syn_profile"      # all /syn_profile (uses protection's port group)
-      activation_mode: "continuous"         # Continuous/threshold-based
+      activation_threshold: 7500             # Policy activation threshold (SYN packets/sec)
+      termination_threshold: 2500            # Policy termination threshold (SYN packets/sec)
+      destination_ports: "all"              # all / syn_profile (Apply Authentication To)
+      activation_mode: "continuous"         # continuous / threshold_based
+      auth_type: "safe_reset"               # safe_reset / transparent_proxy
+      tcp_reset_status: "enable"            # enable, disable
 
   # --------------------------------------------------
-  # Profile 2 (SYN_PROFILE_2) 
+  # Profile 2 (SYN_PROFILE_2)
+  # Per destination IP tracking with network + application authentication
   # --------------------------------------------------
   - name: "SYN_PROFILE_2"
     protections:
       - "SYN_PROT_2"
     params:
-      auth_type: "safe_reset"               # transparent_proxy / safe_reset
-      http_enable: "enable"                  # Enables web-based mitigation controls
-      http_method: "redirect"                # redirect / javascript
-      tcp_reset_status: "enable"            # enable, disable
-      ssl_mitigation_status: "enable"       # enable, disable
       action: "block_and_report"            # report_only / block_and_report
-      tracking_mode: "per_destination"      # Tracks per destination (required for web_enable usage)
-      activation_threshold: 2000            # SYN threshold for switching to mitigation
-      destination_ports: "all"              # all /syn_profile
-      activation_mode: "threshold_based"    # threshold-based / continuous
+      activation_threshold: 7500
+      termination_threshold: 2500
+      destination_ports: "syn_profile"
+      activation_mode: "threshold_based"
+      auth_type: "safe_reset"               # safe_reset / transparent_proxy
+      tcp_reset_status: "enable"            # enable, disable
 
+  # --------------------------------------------------
+  # Profile 3 (example)
+  # --------------------------------------------------
+  # - name: "SYN_PROFILE_3"
+  #   protections:
+  #     - "SYN_PROT_1"
+  #   params:
+  #     action: "block_and_report"
+  #     destination_ports: "all"
+  #     activation_mode: "threshold_based"
+  #     activation_threshold: 7500
+  #     termination_threshold: 2500
+  #     auth_type: "safe_reset"
+  #     tcp_reset_status: "disable"
 
 
 ################################## HTTPS Profile Create Variables ###############################

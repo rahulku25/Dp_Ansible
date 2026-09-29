@@ -10,6 +10,14 @@ Automate configuration of DefensePro security profiles, policies, and network se
 
 **For Developers**: See [DEVELOPER.md](DEVELOPER.md) for technical architecture and API details
 
+## Tested Versions
+
+| Platform | Version |
+|----------|---------|
+| DefensePro | 8.34.2 |
+| DefensePro | 8.35.2 |
+| DPx | 10.10.1 |
+
 ## Prerequisites
 
 Before using the DefensePro Configuration Builder, you need to set up the basic Ansible environment:

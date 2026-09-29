@@ -24,9 +24,21 @@
           {% if item.failed | default(false) %}
             ERROR: Failed to fetch SYN profiles/protections/parameters
               - {{ item.msg | default('Unknown error') }}
-          {% elif item.profiles | length == 0 %}
-            No SYN profiles found on this device.
           {% else %}
+            All SYN Protections ({{ item.protections | default([]) | length }}):
+            {% for prot in item.protections | default([]) | sort(attribute='protection_id') %}
+              - Protection Name: {{ prot.protection_name }}
+                Protection ID: {{ prot.protection_id }}
+                Activation Threshold: {{ prot.activation_threshold }}
+                Termination Threshold: {{ prot.termination_threshold }}
+                App Port Group: {{ prot.app_port_group }}
+            {% else %}
+              No SYN protections found on this device.
+            {% endfor %}
+
+            {% if item.profiles | length == 0 %}
+            No SYN profiles found on this device.
+            {% else %}
             Profiles, Protections, and Parameters:
             {% for profile_entry in item.profiles | sort(attribute='profile.profile_name') %}
               Profile: {{ profile_entry.profile.profile_name }}
@@ -46,21 +58,19 @@
 
               {% if profile_entry.parameters %}
                 Parameters:
-                  - Auth Type: {{ profile_entry.parameters.AuthType }}
-                  - HTTP Auth Status: {{ profile_entry.parameters.WebEnable }}
-                  - HTTP Auth Method: {{ profile_entry.parameters.WebMethod }}
-                  - TCP Reset Status: {{ profile_entry.parameters.TCPResetStatus }}
-                  - SSL Mitigation Status: {{ profile_entry.parameters.SSLMitigationStatus }}
-                  - Action: {{ profile_entry.parameters.Action }}
-                  - Tracking Mode: {{ profile_entry.parameters.TrackingMode }}
-                  - Activation Threshold: {{ profile_entry.parameters.ActivationThreshold }}
-                  - Destination Ports: {{ profile_entry.parameters.DestinationPorts }}
-                  - Activation Mode: {{ profile_entry.parameters.ActivationMode }}
+                  - Action: {{ profile_entry.parameters.action }}
+                  - Apply Authentication To: {{ profile_entry.parameters.destination_ports }}
+                  - Activation Mode: {{ profile_entry.parameters.activation_mode }}
+                  - Policy Activation Threshold: {{ profile_entry.parameters.activation_threshold }}
+                  - Policy Termination Threshold: {{ profile_entry.parameters.termination_threshold }}
+                  - TCP Reset Status: {{ profile_entry.parameters.tcp_reset_status }}
+                  - Authentication Method: {{ profile_entry.parameters.auth_type }}
               {% else %}
                 No parameters defined for this profile.
               {% endif %}
 
             {% endfor %}
+            {% endif %}
           {% endif %}
       ansible.builtin.debug:
         msg: "{{ formatted_output.split('\n') }}"

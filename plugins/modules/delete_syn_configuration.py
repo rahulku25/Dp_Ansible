@@ -60,6 +60,17 @@ def run_module():
         except Exception as e:
             module.fail_json(msg=f"Failed to fetch SYN protections: {str(e)}", debug_info=debug_info)
 
+        attached_pairs = set()
+        try:
+            resp = cc._get(f"https://{cc_ip}/mgmt/device/byip/{dp_ip}/config/rsIDSSynProfilesTable")
+            resp.raise_for_status()
+            for entry in resp.json().get('rsIDSSynProfilesTable', []):
+                attached_pairs.add((entry.get('rsIDSSynProfilesName'), entry.get('rsIDSSynProfileServiceName')))
+            logger.info(f"Fetched {len(attached_pairs)} SYN profile attachments from {dp_ip}")
+        except Exception as e:
+            logger.debug(f"Could not fetch SYN profile attachments (non-critical): {str(e)}")
+            attached_pairs = None
+
         operations = []
 
         # Build remove_from_profile operations
@@ -68,7 +79,7 @@ def run_module():
             protections = profile.get('protections', [])
             for prot in protections:
                 prot_name = prot.get('protection_name')
-                prot_id = protection_name_to_id.get(prot_name)
+                attached = True if attached_pairs is None else (profile_name, prot_name) in attached_pairs
                 operations.append({
                     'type': 'remove_from_profile',
                     'profile_name': profile_name,
@@ -76,13 +87,25 @@ def run_module():
                     'method': 'DELETE',
                     'url': f"/mgmt/device/byip/{dp_ip}/config/rsIDSSynProfilesTable/{profile_name}/{prot_name}",
                     'description': f"Remove '{prot_name}' from profile '{profile_name}'",
-                    'exists': prot_id is not None
+                    'exists': attached,
+                    'not_found_error': f"Protection '{prot_name}' is not attached to profile '{profile_name}'"
                 })
 
         # Build delete_protection operations
         for prot_del in syn_protection_deletions:
-            for prot_name in prot_del.get('protections_to_delete', []):
-                prot_id = protection_name_to_id.get(prot_name)
+            for protection_ref in prot_del.get('protections_to_delete', []):
+                if isinstance(protection_ref, int) or str(protection_ref).isdigit():
+                    prot_id = int(protection_ref)
+                    prot_name = next(
+                        (name for name, found_id in protection_name_to_id.items()
+                         if str(found_id) == str(prot_id)),
+                        str(protection_ref)
+                    )
+                    exists = str(prot_id) in {str(value) for value in protection_name_to_id.values()}
+                else:
+                    prot_name = protection_ref
+                    prot_id = protection_name_to_id.get(prot_name)
+                    exists = prot_id is not None
                 operations.append({
                     'type': 'delete_protection',
                     'protection_name': prot_name,
@@ -90,7 +113,8 @@ def run_module():
                     'method': 'DELETE',
                     'url': f"/mgmt/device/byip/{dp_ip}/config/rsIDSSYNAttackTable/{prot_id if prot_id else 'NA'}",
                     'description': f"Delete protection '{prot_name}' (ID {prot_id})",
-                    'exists': prot_id is not None
+                    'exists': exists,
+                    'not_found_error': f"Protection '{protection_ref}' not found"
                 })
 
         deleted_from_profiles = []
@@ -104,7 +128,7 @@ def run_module():
                 failed_operations.append({
                     'object_name': op.get('protection_name'),
                     'status': 'FAILED',
-                    'error': f"Object '{op.get('protection_name')}' not found",
+                    'error': op.get('not_found_error', f"Object '{op.get('protection_name')}' not found"),
                     'response_body': {}
                 })
                 continue
@@ -161,7 +185,7 @@ def run_module():
         # Fail if all failed, warn if partial failure
         if total_failed > 0:
             if total_deleted == 0:
-                module.fail_json(msg=f"All SYN deletions failed. Errors: {[f['error'] for f in failed_operations]}", debug_info=debug_info, **result)
+                module.fail_json(msg=f"All SYN deletions failed. Errors: {[f['error'] for f in failed_operations]}", **result)
             else:
                 result['warnings'] = [f['error'] for f in failed_operations]
 

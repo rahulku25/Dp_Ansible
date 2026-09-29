@@ -53,17 +53,17 @@
               Profiles ({{ item.response.profiles | length }}):
               {% for prof in item.response.profiles %}
                 - Profile Name: {{ prof.profile_name }}
-                  {% set attached = [] %}
-                  {% for prot in item.response.protections %}
-                    {% if prof.profile_name in prot.attached_profiles | default([]) %}
-                      {% set _ = attached.append(prot.name) %}
-                    {% endif %}
-                  {% endfor %}
-                  Attached Protection: {{ attached | join(', ') if attached | length > 0 else (prof.protection_name | default('N/A')) }}
+                  Attached Protections: {{ prof.protection_names | default([]) | join(', ') if prof.protection_names | default([]) | length > 0 else 'N/A' }}
                   Parameters:
                   {% for key, val in prof.parameters.items() %}
                     {{ key | replace('_',' ') | title }}: {{ val | default('N/A') }}
                   {% endfor %}
+                  {% if prof.skipped | default({}) | length > 0 %}
+                  Not Applicable (ignored by device):
+                  {% for key, reason in prof.skipped.items() %}
+                    {{ key | replace('_',' ') | title }}: {{ reason }}
+                  {% endfor %}
+                  {% endif %}
               {% endfor %}
               {% endif %}
 
