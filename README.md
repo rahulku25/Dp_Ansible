@@ -373,6 +373,10 @@ ansible-playbook playbooks/delete_security_policy.yml
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v0.2.1 | 2026-09-29 | Added tested-version compatibility for DefensePro 8.34.2, DefensePro 8.35.2, and DPx 10.10.1
+<br>• Aligned SYN profile parameters with the controls supported by DefensePro 10.10.1
+<br>• Added policy activation and termination threshold support
+<br>• Removed unsupported advanced SYN profile parameters from create, edit, and get workflows |
 | v0.2.0 | 2025-09-12 | Added security policy orchestration with profile binding capabilities
 <br>• Added update policies playbook
 <br>• Enhanced Policy creation module logic, effectiveness holistically
